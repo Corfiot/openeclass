@@ -86,7 +86,7 @@ class TcServer
 
     public function recording()
     {
-        return $this->data && $this->enabled_recordings;
+        return $this->data && $this->enable_recordings;
     }
 
     public function enabled()
@@ -96,7 +96,7 @@ class TcServer
 
     public function __get($name)
     {
-        if (! $this->data)
+        if (! $this->data )
             return false;
 
         // Convert to actual booleans
