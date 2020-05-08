@@ -33,13 +33,14 @@ class TcSessionHelper
         if (! self::$tc_types_available)
             self::$tc_types_available = array_keys(TcApi::AVAILABLE_APIS);
 
-        $c = Database::get()->querySingle("SELECT * FROM tc_course_info WHERE course_id=?d", $this->course_id);
+/*        $c = Database::get()->querySingle("SELECT * FROM tc_course_info WHERE course_id=?d", $this->course_id);
         if ($c === null)
             throw new RuntimeException('Query failed for info table query: ' . $this->course_id);
         if (!$c)
             $this->tc_types = self::$tc_types_available;
         else
-            $this->tc_types = $c->types;
+            $this->tc_types = $c->types;*/
+        $this->tc_types = self::$tc_types_available;
     }
 
     public function getApi(array $params = [])
