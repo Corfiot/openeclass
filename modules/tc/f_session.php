@@ -11,14 +11,14 @@ class TcSessionHelper
 
     private $tc_types;
 
+    // types cache - only stores available ones
     private static $tc_types_available = null;
 
-    // types cache - only stores available ones
     const MAX_USERS = 80;
 
+    // recommends USERS/RATIO to user
     const MAX_USERS_RECOMMENDATION_RATIO = 2;
 
-    // recommends USERS/RATIO to user
 
     /**
      *
@@ -67,36 +67,28 @@ class TcSessionHelper
         return $obj->LoadById($id);
     }
     
+
     /**
-     *
-     * @brief Create form for new session scheduling
+     * Returns view data for the add/edit session form
+     * @param TcSession $session
+     * @return array
      */
-    public function form($session_id = 0)
+    public function form($session = null)
     {
-        global $uid;
-        global $langAdd, $langType, $langBBBRecordingNotAvailable, $langBBBRecordingMayNotBeAvailable;
-        global $langUnitDescr, $langNewBBBSessionStart;
-        global $langVisible, $langInvisible;
-        global $langNewBBBSessionStatus, $langBBBSessionAvailable, $langBBBMinutesBefore;
-        global $start_session, $BBBEndDate, $langAnnouncements, $langBBBAnnDisplay;
-        global $langTitle, $langBBBNotifyExternalUsersHelpBlock, $langBBBRecordFalse;
-        global $langBBBNotifyUsers, $langBBBNotifyExternalUsers, $langBBBSessionMaxUsers;
-        global $langAllUsers, $langParticipants, $langBBBRecord, $langBBBRecordTrue;
-        global $langBBBSessionSuggestedUsers, $langBBBSessionSuggestedUsers2;
-        global $langBBBAlertTitle, $langBBBAlertMaxParticipants, $langJQCheckAll, $langJQUncheckAll;
-        global $langEnd, $langBBBEndHelpBlock, $langModify, $langBBBExternalUsers;
+        global $uid,$start_session;
+        global $langAdd,$BBBEndDate,$langBBBSessionSuggestedUsers2,$langModify,$langAllUsers;
 
         $BBBEndDate = Session::has('BBBEndDate') ? Session::get('BBBEndDate') : "";
         $enableEndDate = Session::has('enableEndDate') ? Session::get('enableEndDate') : ($BBBEndDate ? 1 : 0);
 
-        $c = Database::get()->querySingle("SELECT COUNT(*) AS count FROM course_user WHERE course_id=?d", $this->course_id)->count;
-        if ($c > self::MAX_USERS) {
-            $c = floor($c / self::MAX_USERS_RECOMMENDATION_RATIO); // If more than 80 course users, we suggest 50% of them
+        $usercount = Database::get()->querySingle("SELECT COUNT(*) AS count FROM course_user WHERE course_id=?d", $this->course_id)->count;
+        if ($usercount > self::MAX_USERS) {
+            $usercount = floor($usercount / self::MAX_USERS_RECOMMENDATION_RATIO); // If more than 80 course users, we suggest 50% of them
         }
         $found_selected = false;
 
-        if ($session_id > 0) { // edit session details
-            $row = Database::get()->querySingle("SELECT * FROM tc_session WHERE id = ?d", $session_id);
+        if ($session) { // edit session details
+            $row = $session;
             $status = ($row->active == 1 ? 1 : 0);
             $record = ($row->record == "true" ? true : false);
             // $running_at = $row->running_at; -- UNUSED
@@ -123,23 +115,23 @@ class TcSessionHelper
             $value_session_users = $row->sessionUsers;
             $data_external_users = trim($row->external_users);
             if ($data_external_users) {
-                $init_external_users = 'data: ' . json_encode(array_map(function ($item) {
-                    $item = trim($item);
-                    return array(
-                        'id' => $item,
-                        'text' => $item,
-                        'selected' => true
-                    );
-                }, explode(',', $data_external_users))) . ',';
+                $init_external_users = json_encode(array_map(function ($item) {
+                        $item = trim($item);
+                        return array(
+                            'id' => $item,
+                            'text' => $item,
+                            'selected' => true
+                        );
+                    }, explode(',', $data_external_users))
+                );
             } else {
                 $init_external_users = '';
             }
             $submit_name = 'update_bbb_session';
-            $submit_id = "<input type=hidden name = 'id' value=" . getIndirectReference($session_id) . ">";
             $value_message = $langModify;
             $server = TcServer::LoadOneByCourse($this->course_id); // Find the server for this course as previously assigned. This may return false
         } else { // creating new session: set defaults
-            $record = true;
+            $record = false;
             $status = 1;
             $unlock_interval = '10';
             $r_group = array();
@@ -150,9 +142,8 @@ class TcSessionHelper
             $textarea = rich_text_editor('desc', 4, 20, '');
             $value_title = '';
             $init_external_users = '';
-            $value_session_users = $c;
+            $value_session_users = $usercount;
             $submit_name = 'new_bbb_session';
-            $submit_id = '';
             $value_message = $langAdd;
 
             // Pick a server for the course
@@ -163,223 +154,79 @@ class TcSessionHelper
             }
         }
 
-        $tool_content = "
-        <div class='form-wrapper'>
-        <form class='form-horizontal' role='form' name='sessionForm' action='$_SERVER[SCRIPT_NAME]' method='post' >
-        <fieldset>
-        <div class='form-group'>
-            <label class='col-sm-2 control-label'>$langType:</label>
-            <div class='col-sm-10'>
-                    <div class='radio'>";
-        foreach ($this->tc_types as $at) {
-            $tool_content .= '<label><input type="checkbox" id="type_' . $at . '_button" name="type[]" value="' . 
-                $at . '" ' . (in_array($at, $this->tc_types) ? " checked " : '') . '"> ' . $at.'</label>';
-        }
-        $tool_content .= "
-                    </div>
-            </div>
-        </div>
-        <div class='form-group'>
-            <label for='title' class='col-sm-2 control-label'>$langTitle:</label>
-            <div class='col-sm-10'>
-                <input class='form-control' type='text' name='title' id='title' value='$value_title' placeholder='$langTitle' size='50'>
-            </div>
-        </div>
-        <div class='form-group'>
-            <label for='desc' class='col-sm-2 control-label'>$langUnitDescr:</label>
-            <div class='col-sm-10'>
-                $textarea
-            </div>
-        </div>
-        <div class='form-group'>
-            <label for='start_session' class='col-sm-2 control-label'>$langNewBBBSessionStart:</label>
-            <div class='col-sm-10'>
-                <input class='form-control' type='text' name='start_session' id='start_session' value='$start_session'>
-            </div>
-        </div>";
-        $tool_content .= "<div class='input-append date form-group" . (Session::getError('BBBEndDate') ? " has-error" : "") . "' id='enddatepicker' data-date='$BBBEndDate' data-date-format='dd-mm-yyyy'>
-            <label for='BBBEndDate' class='col-sm-2 control-label'>$langEnd:</label>
-            <div class='col-sm-10'>
-                <div class='input-group'>
-                    <span class='input-group-addon'>
-                        <input style='cursor:pointer;' type='checkbox' id='enableEndDate' name='enableEndDate' value='1'" . ($enableEndDate ? ' checked' : '') . ">
-                    </span>
-                    <input class='form-control' name='BBBEndDate' id='BBBEndDate' type='text' value='$BBBEndDate'" . ($enableEndDate ? '' : ' disabled') . ">
-                </div>
-                <span class='help-block'>" . (Session::hasError('BBBEndDate') ? Session::getError('BBBEndDate') : "&nbsp;&nbsp;&nbsp;<i class='fa fa-share fa-rotate-270'></i> $langBBBEndHelpBlock") . "</span>
-            </div>
-        </div>";
-        $tool_content .= "<div class='form-group'>";
-
-        // if no server assigned to course, show options. If the course is server-locked, show recoding options if server allows it
-        if (! $server || $server->recording() && $server->locked) {
-            $tool_content .= "<label for='group_button' class='col-sm-2 control-label'>$langBBBRecord:</label>
-                        <div class='col-sm-10'>
-                            <div class='radio'>
-                              <label>
-                                <input type='radio' id='user_button' name='record' value='true' " . (($record == true) ? 'checked' : '') . ">
-                                $langBBBRecordTrue
-                              </label>
-                            </div>
-                            <div class='radio'>
-                              <label>
-                                <input type='radio' id='group_button' name='record' value='false' " . (($record == false) ? 'checked' : '') . ">
-                               $langBBBRecordFalse
-                              </label>
-                            </div>
-                        </div>";
-            if (! $server) {
-                $tool_content .= "<div>$langBBBRecordingMayNotBeAvailable</div>";
-            }
-        } else {
-            $tool_content .= "<div>$langBBBRecordingNotAvailable</div>";
-        }
-
-        $tool_content .= "</div>";
-
-        $tool_content .= "<div class='form-group'>
-            <label for='active_button' class='col-sm-2 control-label'>$langNewBBBSessionStatus:</label>
-            <div class='col-sm-10'>
-                    <div class='radio'>
-                      <label>
-                        <input type='radio' id='active_button' name='status' value='1' " . (($status == 1) ? "checked" : "") . ">
-                        $langVisible
-                      </label>
-                      <label style='margin-left: 10px;'>
-                        <input type='radio' id='inactive_button' name='status' value='0' " . (($status == 0) ? "checked" : "") . ">
-                       $langInvisible
-                      </label>
-                    </div>
-            </div>
-        </div>
-        <div class='form-group'>
-        <label for='active_button' class='col-sm-2 control-label'>$langAnnouncements:</label>
-            <div class='col-sm-10'>
-                     <div class='checkbox'>
-                      <label>
-                        <input type='checkbox' name='addAnnouncement' value='1'>$langBBBAnnDisplay
-                      </label>
-                    </div>
-            </div>
-        </div>
-        <div class='form-group'>
-            <label for='minutes_before' class='col-sm-2 control-label'>$langBBBSessionAvailable:</label>
-            <div class='col-sm-10'>" . selection(array(
-            10 => '10',
-            15 => '15',
-            30 => '30'
-        ), 'minutes_before', $unlock_interval, "id='minutes_before'") . "
-                $langBBBMinutesBefore
-            </div>
-        </div>
-        <div class='form-group'>
-            <label for='sessionUsers' class='col-sm-2 control-label'>$langBBBSessionMaxUsers:</label>
-            <div class='col-sm-10'>
-                <input class='form-control' type='text' name='sessionUsers' id='sessionUsers' value='$value_session_users'> $langBBBSessionSuggestedUsers:
-                <strong>$c</strong> (" . str_replace("{{RATIO}}", self::MAX_USERS_RECOMMENDATION_RATIO, str_replace("{{MAX}}", self::MAX_USERS, $langBBBSessionSuggestedUsers2)) . ")
-            </div>
-        </div>";
-        $tool_content .= "<div class='form-group'>
-                <label for='select-groups' class='col-sm-2 control-label'>$langParticipants:</label>
-                <div class='col-sm-10'>
-                <select name='groups[]' multiple='multiple' class='form-control' id='select-groups'>";
+        $options = [];
+        
         // select available course groups (if exist)
         $res = Database::get()->queryArray("SELECT `group`.`id`,`group`.`name` FROM `group`
-                                                    RIGHT JOIN course ON group.course_id=course.id
-                                                    WHERE course.id=?d ORDER BY UPPER(NAME)", $this->course_id);
+                                                        RIGHT JOIN course ON group.course_id=course.id
+                                                        WHERE course.id=?d ORDER BY UPPER(NAME)", $this->course_id);
         foreach ($res as $r) {
             if (isset($r->id)) {
-                $tool_content .= "<option value= '_{$r->id}'";
+                $option['value'] = '_'.$r->id;
+                //$tool_content .= "<option value= '_{$r->id}'";
                 if (in_array(("_{$r->id}"), $r_group)) {
                     $found_selected = true;
-                    $tool_content .= ' selected';
+                    $option['selected'] = true;
+                    //$tool_content .= ' selected';
                 }
-                $tool_content .= ">" . q($r->name) . "</option>";
+                $option['text'] = $r->name;
+                //$tool_content .= ">" . q($r->name) . "</option>";
+                $options[] = $option;
             }
         }
         // select all users from this course except yourself
         $sql = "SELECT u.id user_id, CONCAT(u.surname,' ', u.givenname) AS name, u.username
-                            FROM user u, course_user cu
-                            WHERE cu.course_id = ?d
-                            AND cu.user_id = u.id
-                            AND cu.status != ?d
-                            AND u.id != ?d
-                            GROUP BY u.id, name, u.username
-                            ORDER BY UPPER(u.surname), UPPER(u.givenname)";
+                                FROM user u, course_user cu
+                                WHERE cu.course_id = ?d
+                                AND cu.user_id = u.id
+                                AND cu.status != ?d
+                                AND u.id != ?d
+                                GROUP BY u.id, name, u.username
+                                ORDER BY UPPER(u.surname), UPPER(u.givenname)";
         $res = Database::get()->queryArray($sql, $this->course_id, USER_GUEST, $uid);
         foreach ($res as $r) {
             if (isset($r->user_id)) {
-                $tool_content .= "<option value='{$r->user_id}'";
+                $option['value'] = $r->user_id;
+                //$tool_content .= "<option value='{$r->user_id}'";
                 if (in_array(("$r->user_id"), $r_group)) {
                     $found_selected = true;
-                    $tool_content .= ' selected';
+                    $option['selected'] = true;
+                    //$tool_content .= ' selected';
                 }
-                $tool_content .= ">" . q($r->name) . " (" . q($r->username) . ")</option>";
+                $option['text'] = $r->name. '('.$r->username.')';
+                //$tool_content .= ">" . q($r->name) . " (" . q($r->username) . ")</option>";
+                $options[] = $option;
             }
         }
-        if ($found_selected == false) {
-            $tool_content .= "<option value='0' selected><h2>$langAllUsers</h2></option>";
-        } else {
-            $tool_content .= "<option value='0'><h2>$langAllUsers</h2></option>";
-        }
-
-        $tool_content .= "</select><a href='#' id='selectAll'>$langJQCheckAll</a> | <a href='#' id='removeAll'>$langJQUncheckAll</a>
-                </div>
-            </div>";
-
-        $tool_content .= "<div class='form-group'>
-            <div class='col-sm-10 col-sm-offset-2'>
-                     <div class='checkbox'>
-                      <label>
-                        <input type='checkbox' name='notifyUsers' value='1'>$langBBBNotifyUsers
-                      </label>
-                    </div>
-            </div>
-        </div>";
-
-        $tool_content .= "
-        <div class='form-group'>
-            <label for='tags_1' class='col-sm-2 control-label'>$langBBBExternalUsers:</label>
-            <div class='col-sm-10'>
-                <select id='tags_1' class='form-control' name='external_users[]' multiple></select>
-                <span class='help-block'>&nbsp;&nbsp;&nbsp;<i class='fa fa-share fa-rotate-270'></i> $langBBBNotifyExternalUsersHelpBlock</span>
-            </div>
-        </div>
-        <div class='form-group'>
-            <div class='col-sm-10 col-sm-offset-2'>
-                     <div class='checkbox'>
-                      <label>
-                        <input type='checkbox' name='notifyExternalUsers' value='1'>$langBBBNotifyExternalUsers
-                      </label>
-                    </div>
-            </div>
-        </div>
-        $submit_id
-        <div class='form-group'>
-            <div class='col-sm-10 col-sm-offset-2'>
-                <input class='btn btn-primary' type='submit' name='$submit_name' value='$value_message'>
-            </div>
-        </div>
-        </fieldset>
-         " . generate_csrf_token_form_field() . "
-        </form></div>";
-        $tool_content .= "<script language='javaScript' type='text/javascript'>
-        //<![CDATA[
-            var chkValidator  = new Validator('sessionForm');
-            chkValidator.addValidation('title', 'req', '" . js_escape($langBBBAlertTitle) . "');
-            chkValidator.addValidation('sessionUsers', 'req', '" . js_escape($langBBBAlertMaxParticipants) . "');
-            chkValidator.addValidation('sessionUsers', 'numeric', '" . js_escape($langBBBAlertMaxParticipants) . "');
-            $(function () {
-                $('#tags_1').select2({
-                    $init_external_users
-                    tags: true,
-                    tokenSeparators: [',', ' '],
-                    width: '100%',
-                    selectOnClose: true});
-                });
-        //]]></script>";
-
-        return $tool_content;
+        $options[] = [
+            'value'=>0, 'text' => $langAllUsers, 'selected' => !$found_selected
+        ];
+        
+        //$tool_content .= "<option value='0'><h2>$langAllUsers</h2></option>";
+        
+        $data = [
+            'types' => $this->tc_types,
+            'title' => $value_title,
+            'desc' => $textarea,
+            'start' => $start_session,
+            'end' => $BBBEndDate,
+            'enableEndDate' => $enableEndDate,
+            'server' => $server,
+            'record'=> $record,
+            'status'=>$status,
+            'unlock_interval'=>$unlock_interval,
+            'session_users'=>$value_session_users,
+            'usercount'=>$usercount,
+            'ratio'=>str_replace("{{RATIO}}", self::MAX_USERS_RECOMMENDATION_RATIO, str_replace("{{MAX}}", self::MAX_USERS, $langBBBSessionSuggestedUsers2)),
+            'participantoptions' => $options,
+            'value_message'=>$value_message,
+            'submit_name'=>$submit_name,
+            'init_external_users'=>$init_external_users
+        ];
+        if ( $session )
+            $data['id'] = getIndirectReference($session->session_id);
+        
+        return $data;
     }
 
     /*
@@ -636,57 +483,21 @@ class TcSessionHelper
     }
 
     /**
-     * * @brief Print a box with the details of a bbb session
-     *
-     * @param integer $course_id
-     * @global type $tool_content
-     * @global type $is_editor
-     * @param string $course_code
-     * @global type $uid
-     * @global string $langBBBServer
-     * @global type $langNewBBBSessionStart
-     * @global type $langNewBBBSessionDesc,
-     * @global type $langNewBBBSessionEnd,
-     * @global type $langParticipants
-     * @global type $langConfirmDelete
-     * @global type $langBBBSessionJoin
-     * @global type $langNote
-     * @global type $langBBBNoteEnableJoin
-     * @global type $langTitle
-     * @global type $langActivate
-     * @global type $langDeactivate
-     * @global type $langEditChange
-     * @global type $langDelete
-     * @global type $langParticipate
-     * @global type $langNoBBBSesssions
-     * @global type $langDaysLeft
-     * @global type $langHasExpiredS
-     * @global type $langBBBNotServerAvailableStudent
-     * @global type $langBBBNotServerAvailableTeacher
-     * @global type $langBBBImportRecordings
-     * @global type $langAllUsers
-     * @global type $langBBBNoServerForRecording
-     * @param string $tc_type
+     * Returns the view data for the session listing
+     * @return array
      */
     function tc_session_details()
     {
-        global $is_editor, $uid, $langBBBServer, $langNewBBBSessionStart, $langParticipants, $langConfirmDelete, $langHasExpiredS, 
-            $langBBBSessionJoin, $langNote, $langBBBNoteEnableJoin, $langTitle, $langActivate, $langDeactivate, $langEditChange, $langDelete, 
-            $langParticipate, $langNoBBBSesssions, $langDaysLeft, $langBBBNotServerAvailableStudent, $langNewBBBSessionEnd, 
-            $langBBBNotServerAvailableTeacher, $langBBBImportRecordings, $langAllUsers, $langDate, $langBBBNoServerForRecording;
+        global $is_editor, $uid, $langHasExpiredS, 
+            $langNote, $langBBBNoteEnableJoin,$langDaysLeft,$langAllUsers, $langBBBNoServerForRecording,$langPublicAccess;
 
-        $tool_content = '';
-
+        $viewdata['is_editor'] = $is_editor;
+            
         $isActiveTcServer = $this->is_active_tc_server(); // cache this since it involves DB queries
-
-        if (! $isActiveTcServer) { // check availability
-            if ($is_editor) {
-                $tool_content .= "<div class='alert alert-danger'>$langBBBNotServerAvailableTeacher</div>";
-            } else {
-                $tool_content .= "<div class='alert alert-danger'>$langBBBNotServerAvailableStudent</div>";
-            }
-        }
-
+        $viewdata['active_server_exists'] = $isActiveTcServer;
+        $viewdata['sessions'] = [];
+        
+        //FIXME: this should go into the template globally
         load_js('trunk8');
 
         $myGroups = Database::get()->queryArray("SELECT group_id FROM group_members WHERE user_id=?d", $_SESSION['uid']);
@@ -699,21 +510,90 @@ class TcSessionHelper
             if ((! $is_editor) and $isActiveTcServer) {
                 $tool_content .= "<div class='alert alert-info'><label>$langNote</label>: $langBBBNoteEnableJoin</div>";
             }
-            $headingsSent = false;
-            $headings = "<div class='row'>
-                           <div class='col-md-12'>
-                             <div class='table-responsive'>
-                               <table class='table-default'>
-                                 <tr class='list-header'>
-                                   <th style='width: 50%'>$langTitle</th>
-                                   <th class='text-center'>$langDate</th>
-                                   <th class='text-center'>$langParticipants</th>
-                                   <th class='text-center'>$langBBBServer</th>
-                                   <th class='text-center'>" . icon('fa-gears') . "</th>
-                                 </tr>";
             foreach ($result as $row) {
-                $participants = '';
+                // Allow access to admin
+                $access = $is_editor;
+                
+                // Allow access to session if user is in participant group or session is scheduled for everyone
+                if ( !$access ) {
+                    $r_group = explode(",", $row->participants);
+                    if (in_array('0', $r_group)) { // all users
+                        $access = TRUE;
+                    } else {
+                        if (in_array("$uid", $r_group)) { // user search
+                            $access = TRUE;
+                        } else {
+                            foreach ($myGroups as $user_gid) { // group search
+                                if (in_array("_$user_gid->group_id", $r_group)) {
+                                    $access = TRUE;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Allow access to editor switched to student view
+                // FIXME: Should probably lock student_view to course_id and not course_code, there could be duplicates
+                if ( !$access )
+                    $access = isset($_SESSION['student_view']) and $_SESSION['student_view'] == $this->course_code;
+
+                if ( !$access )
+                    continue; //move on to the next one
+
+                $s = [
+                    'id'=>$row->id
+                ];
+                    
+                //Dates: start, end and duration
+                $start_date = $row->start_date;
+                $end_date = $row->end_date;
+                if ($end_date) {
+                    $timeLeft = date_diff_in_minutes($end_date, date('Y-m-d H:i:s'));
+                    $s['timeLabel'] = nice_format($end_date, TRUE);
+                } else {
+                    $timeLeft = date_diff_in_minutes($start_date, date('Y-m-d H:i:s'));
+                    $s['timeLabel'] = '&nbsp;&nbsp;&nbsp;-&nbsp;&nbsp;&nbsp;';
+                }
+                if ($timeLeft > 0) {
+                    $s['timeLabel'] .= "<br><span class='label label-warning'><small>$langDaysLeft " . format_time_duration($timeLeft * 60) . "</small></span>";
+                } elseif (isset($end_date) and ($timeLeft < 0)) {
+                    $s['timeLabel'] .= "<br><span class='label label-danger'><small>$langHasExpiredS</small></span>";
+                }
+                $s['start_date'] = $start_date;
+                
+                //Check is we can join the session
+                if (isset($end_date) and ($timeLeft < 0)) {
+                    $canJoin = FALSE;
+                } elseif (($row->active == '1') and (date_diff_in_minutes($start_date, date('Y-m-d H:i:s')) < $row->unlock_interval) and $isActiveTcServer) {
+                    $canJoin = TRUE;
+                } else
+                    $canJoin = FALSE;
+                $s['canJoin'] = $canJoin;
+                if ($canJoin) {
+                    $s['joinLink'] = '<a href="'.$this->get_join_link('',$row->id).'">'.q($row->title).'</a>';
+                } else {
+                    $s['joinLink'] = $row->title;
+                }
+
+                //Check if recording is available
+                $record = $row->record;
+                if ($row->running_at)
+                    $course_server = TcServer::LoadById($row->running_at);
+                else
+                    $record = 'false';
+                if ($record == 'false' or !$course_server->recording()) {
+                    $s['warning_message_record'] = "<span class='fa fa-info-circle' data-toggle='tooltip' data-placement='right' title='$langBBBNoServerForRecording".
+                        ($course_server->recording()?'':' (server)').
+                    "'></span>";
+                }
+                
+                //description
+                $s['desc'] = isset($row->description) ? $row->description : '';
+                
+                $s['desc'] .= $row->public?'['.$langPublicAccess.']':'';
+                
                 // Get participants
+                $participants = '';
                 $r_group = explode(",", $row->participants);
                 foreach ($r_group as $participant_uid) {
                     if ($participants) {
@@ -730,172 +610,20 @@ class TcSessionHelper
                         }
                     }
                 }
-                $participants = "<span class='trunk8'>$participants</span>";
-                $serverinfo = '#'.$row->serverid.'<br>'.$row->type;
-                $title = $row->title;
-                $start_date = $row->start_date;
-                $end_date = $row->end_date;
-                if ($end_date) {
-                    $timeLeft = date_diff_in_minutes($end_date, date('Y-m-d H:i:s'));
-                    $timeLabel = nice_format($end_date, TRUE);
-                } else {
-                    $timeLeft = date_diff_in_minutes($start_date, date('Y-m-d H:i:s'));
-                    $timeLabel = '&nbsp;&nbsp;&nbsp;-&nbsp;&nbsp;&nbsp;';
-                }
-                if ($timeLeft > 0) {
-                    $timeLabel .= "<br><span class='label label-warning'><small>$langDaysLeft " . format_time_duration($timeLeft * 60) . "</small></span>";
-                } elseif (isset($end_date) and ($timeLeft < 0)) {
-                    $timeLabel .= "<br><span class='label label-danger'><small>$langHasExpiredS</small></span>";
-                }
-                $record = $row->record;
-                $desc = isset($row->description) ? $row->description : '';
+                $s['participants'] = $participants;
 
-                if (isset($end_date) and ($timeLeft < 0)) {
-                    $canJoin = FALSE;
-                } elseif (($row->active == '1') and (date_diff_in_minutes($start_date, date('Y-m-d H:i:s')) < $row->unlock_interval) and $isActiveTcServer) {
-                    $canJoin = TRUE;
-                } else
-                    $canJoin = FALSE;
-
-                if ($canJoin) {
-                    $joinLink = '<a href="'.$this->get_join_link('',$row->id).'">'.q($title).'</a>';
-                } else {
-                    $joinLink = q($title);
-                }
-
-                if ($row->running_at)
-                    $course_server = TcServer::LoadById($row->running_at);
-                else
-                    $record = 'false';
-
-                if ($record == 'false' or ! $course_server->recording()) {
-                    $warning_message_record = "<span class='fa fa-info-circle' data-toggle='tooltip' data-placement='right' title='$langBBBNoServerForRecording'></span>";
-                } else {
-                    $warning_message_record = '';
-                }
-
-                if ($is_editor) {
-                    if (! $headingsSent) {
-                        $tool_content .= $headings;
-                        $headingsSent = true;
-                    }
-                    $tool_content .= '<tr' . ($row->active ? '' : " class='not_visible'") . ">
-                        <td>
-                            <div class='table_td'>
-                                <div class='table_td_header clearfix'>$joinLink $warning_message_record</div> 
-                                <div class='table_td_body'>
-                                    $desc
-                                </div>
-                            </div>
-                        </td>
-                        <td class='text-center'>
-                            <div style='padding-top: 7px;'>  
-                                <span class='text-success'>$langNewBBBSessionStart</span>: " . nice_format($start_date, TRUE) . "<br/>
-                            </div>
-                            <div style='padding-top: 7px;'>
-                                <span class='text-danger'>$langNewBBBSessionEnd</span>: $timeLabel</br></br>
-                            </div>
-                        </td>
-                        
-                        <td style='width: 20%'>$participants</td>
-                        <td>".$serverinfo."</td>
-                        <td class='option-btn-cell'>" . action_button(array(
-                        array(
-                            'title' => $langEditChange,
-                            'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($row->id) . "&amp;choice=edit",
-                            'icon' => 'fa-edit'
-                        ),
-                        array(
-                            'title' => $langBBBImportRecordings,
-                            'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($row->id) . "&amp;choice=import_video",
-                            'icon' => "fa-edit",
-                            'show' => in_array('bbb', $this->tc_types)
-                        ),
-                        array(
-                            'title' => $langParticipate,
-                            'url' => "tcuserduration.php?id=$row->id",
-                            'icon' => "fa-clock-o",
-                            'show' => in_array('bbb', $this->tc_types)
-                        ),
-                        array(
-                            'title' => $row->active ? $langDeactivate : $langActivate,
-                            'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($row->id) . "&amp;choice=do_" . ($row->active ? 'disable' : 'enable'),
-                            'icon' => $row->active ? 'fa-eye' : 'fa-eye-slash'
-                        ),
-                        array(
-                            'title' => $langDelete,
-                            'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($row->id) . "&amp;choice=do_delete",
-                            'icon' => 'fa-times',
-                            'class' => 'delete',
-                            'confirm' => $langConfirmDelete
-                        )
-                    )) . "</td></tr>";
-                } else {
-                    $access = FALSE;
-                    // Allow access to session only if user is in participant group or session is scheduled for everyone
-                    $r_group = explode(",", $row->participants);
-                    if (in_array('0', $r_group)) { // all users
-                        $access = TRUE;
-                    } else {
-                        if (in_array("$uid", $r_group)) { // user search
-                            $access = TRUE;
-                        } else {
-                            foreach ($myGroups as $user_gid) { // group search
-                                if (in_array("_$user_gid->group_id", $r_group)) {
-                                    $access = TRUE;
-                                }
-                            }
-                        }
-                    }
-
-                    // Always allow access to editor switched to student view
-                    $access = $access || (isset($_SESSION['student_view']) and $_SESSION['student_view'] == $this->course_code);
-
-                    if ($access) {
-                        if (! $headingsSent) {
-                            $tool_content .= $headings;
-                            $headingsSent = true;
-                        }
-                        $tool_content .= "<tr>
-                            <td>
-                            <div class='table_td'>
-                                <div class='table_td_header clearfix'>$joinLink</div> $warning_message_record
-                                <div class='table_td_body'>
-                                    $desc
-                                </div>
-                            </div>
-                        </td>
-                        <td class='text-center'>
-                            <div style='padding-top: 7px;'>  
-                                <span class='text-success'>$langNewBBBSessionStart</span>: " . nice_format($start_date, TRUE) . "<br/>
-                            </div>
-                            <div style='padding-top: 7px;'>
-                                <span class='text-danger'>$langNewBBBSessionEnd</span>: $timeLabel</br></br>
-                            </div>
-                        </td>
-                            <td style='width: 20%'>$participants</td>
-                            <td class='text-center'>";
-                        // Join url will be active only X minutes before scheduled time and if session is visible for users
-                        if ($canJoin) {
-                            $tool_content .= icon('fa-sign-in', $langBBBSessionJoin, $joinLink);
-                        } else {
-                            $tool_content .= "-</td>";
-                        }
-                        $tool_content .= "</tr>";
-                    }
-                }
+                //Server information
+                $s['serverinfo'] = [
+                    'id'=>$row->serverid,
+                    'type'=>$row->type
+                ];
+                
+                $s['active'] = $row->active;
+                
+                $viewdata['sessions'][] = $s;
             }
-            if ($headingsSent) {
-                $tool_content .= "</table></div></div></div>";
-            }
-
-            if (! $is_editor and ! $headingsSent) {
-                $tool_content .= "<div class='alert alert-warning'>$langNoBBBSesssions</div>";
-            }
-        } else {
-            $tool_content .= "<div class='alert alert-warning'>$langNoBBBSesssions</div>";
-        }
-        return $tool_content;
+        } 
+        return $viewdata;
     }
 
     /**

@@ -58,8 +58,6 @@ load_js('bootstrap-datetimepicker');
 load_js('validation.js');
 load_js('select2');
 
-$head_content .= '<script type="text/javascript" src="tc.js"></script>';
-
 $tc_types = array_keys(TcApi::AVAILABLE_APIS); //all available apis globally
 $tc_session_helper = new TcSessionHelper($course_id,$course_code,$tc_types);
 $isactiveserver = $tc_session_helper->is_active_tc_server();
@@ -71,7 +69,7 @@ if ($is_editor) {
         } elseif ((isset($_GET['choice'])) and $_GET['choice'] == 'edit') {
             $pageName = $langModify;
         }
-        $tool_content .= action_bar(array(
+        $action_bar = action_bar(array(
             array(
                 'title' => $langBack,
                 'url' => "$_SERVER[SCRIPT_NAME]?course=$course_code",
@@ -81,7 +79,7 @@ if ($is_editor) {
         ));
     } else {
         if (isset($_GET['id'])) {
-            $tool_content .= action_bar(array(
+            $action_bar = action_bar(array(
                 array(
                     'title' => $langBack,
                     'url' => "$_SERVER[SCRIPT_NAME]?course=$course_code",
@@ -90,7 +88,7 @@ if ($is_editor) {
                 )
             ));
         } else {
-            $tool_content .= action_bar(array(
+            $action_bar = action_bar(array(
                 array(
                     'title' => $langNewBBBSession,
                     'url' => "$_SERVER[SCRIPT_NAME]?course=$course_code&amp;add=1",
@@ -117,7 +115,7 @@ if ($is_editor) {
         }
     }
 } else {
-    $tool_content .= action_bar(array(
+    $action_bar = action_bar(array(
         array(
             'title' => $langParticipate,
             'url' => "tcuserduration.php?course=$course_code&amp;u=true",
@@ -133,7 +131,10 @@ if (isset($_GET['add'])) {
         'url' => "$_SERVER[SCRIPT_NAME]?course=$course_code",
         'name' => $langBBB
     );
-    $tool_content .= $tc_session_helper->form();
+    add_units_navigation(TRUE);
+    $data = $tc_session_helper->form();
+    $data['action_bar'] = $action_bar;
+    view('modules.tc.session_form', $data);
 } elseif (isset($_POST['update_bbb_session'])) {
     if (! isset($_POST['token']) || ! validate_csrf_token($_POST['token']))
         csrf_token_error();
@@ -162,7 +163,10 @@ if (isset($_GET['add'])) {
     
     switch ($_GET['choice']) {
         case 'edit':
-            $tool_content .= $tc_session_helper->form($session_id);
+            add_units_navigation(TRUE);
+            $data = $tc_session_helper->form($tc_session);
+            $data['action_bar'] = $action_bar;
+            view('modules.tc.session_form', $data);
             break;
         case 'do_delete':
             if ($tc_session->delete()) {
@@ -238,7 +242,9 @@ if (isset($_GET['add'])) {
 
             break;
         case 'import_video':
-            $tool_content .= $tc_session->publish_video_recordings(getDirectReference($_GET['id']));
+            $tool_content .= $tc_session_helper->publish_video_recordings(getDirectReference($_GET['id']));
+            add_units_navigation(TRUE);
+            draw($tool_content, 2, null, $head_content);
             break;
     }
 } elseif (isset($_POST['new_bbb_session'])) { // new BBB session
@@ -251,8 +257,9 @@ if (isset($_GET['add'])) {
     }
     redirect_to_home_page("modules/tc/index.php?course=$course_code");
 } else { // display list of conferences
-    $tool_content .= $tc_session_helper->tc_session_details();
+    add_units_navigation(TRUE);
+    $data = $tc_session_helper->tc_session_details();
+    $data['action_bar'] = $action_bar;
+    view('modules.tc.session_list',$data);
 }
 
-add_units_navigation(TRUE);
-draw($tool_content, 2, null, $head_content);

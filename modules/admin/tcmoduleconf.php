@@ -174,8 +174,8 @@ elseif (isset($_GET['add_server']) || isset($_GET['edit_server'])) { //SHOW CREA
             'icon' => 'fa-reply',
             'level' => 'primary-label')));
 
-    $data['bbb_servers'] = TcServer::LoadAll();
-    $view = 'admin.other.extapps.bbb.index';
+    $data['servers'] = TcServer::LoadAll();
+    $view = 'admin.other.extapps.tc.index';
 }
 
 $data['menuTypeID'] = 3;
