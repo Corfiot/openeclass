@@ -11,7 +11,7 @@ abstract class TcApi
         'zoom' => 'Zoom'
     ];
 
-    private static $_cache;
+    protected static $_cache;
 
     protected static function cacheStore($key, $data)
     {

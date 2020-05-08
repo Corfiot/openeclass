@@ -734,14 +734,14 @@ class Zoom extends TcApi
     private $_ApiSecret;
 
     private $_jwt;
-
+	
     public function __construct($params = [])
-    {
+    {	
         if (is_array($params) && count($params) > 0) {
             if (array_key_exists('server', $params)) {
                 $this->_ApiUrl = $params['server']->api_url;
-                $this->_ApiSecret = $params['server']->server_key;
-            }
+				list($this->_ApiKey,$this->_ApiSecret)=explode('.',$params['server']->server_key);
+			}
             if (array_key_exists('url', $params))
                 $this->_ApiUrl = $params['url'];
             if (array_key_exists('key', $params))
@@ -756,11 +756,25 @@ class Zoom extends TcApi
 
     private function generateJWT()
     {
-        $this->_jwt = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOm51bGwsImlzcyI6InFGQll5a0puUXEyNVVKaHZLV2VrTFEiLCJleHAiOjE1ODg3ODA1MzgsImlhdCI6MTU4ODE3NTcwNX0.IUeZvTZsPEDVF57pqGpO5pOSXZCmEbEagKLenyT4bJ4';
-        if ($this->_jwt)
-            return;
+		
         if ($this->_ApiUrl && $this->_ApiKey && $this->_ApiSecret) {
-            $this->_jwt = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOm51bGwsImlzcyI6InFGQll5a0puUXEyNVVKaHZLV2VrTFEiLCJleHAiOjE1ODg3ODA1MzgsImlhdCI6MTU4ODE3NTcwNX0.IUeZvTZsPEDVF57pqGpO5pOSXZCmEbEagKLenyT4bJ4';
+			
+			$meeting_duration=3600;
+			$token_start=time();
+			$token_end=time()+$meeting_duration;
+			
+			$header_array=array('typ'=>'JWT','alg'=>'HS256');
+			$payload_array=array('aud'=>null, 'iss'=>$this->_ApiKey, 'exp'=>$token_end, 'iat'=>$token_start);
+			$header_json=json_encode($header_array);
+			$payload_json=json_encode($payload_array);
+			$header_json64=str_replace('=', '', strtr(base64_encode($header_json), '+/', '-_'));
+			$payload_json64=str_replace('=', '', strtr(base64_encode($payload_json), '+/', '-_'));
+			
+			$signature=hash_hmac('SHA256',$header_json64.'.'.$payload_json64,$this->_ApiSecret, true);
+			$signature64=str_replace('=', '', strtr(base64_encode($signature), '+/', '-_'));
+			
+			$this->_jwt = $header_json64.'.'.$payload_json64.'.'.$signature64;
+			return;
         } else
             die('[' . __METHOD__ . '] Missing info to generate JWT');
     }
@@ -828,7 +842,6 @@ class Zoom extends TcApi
         if ( $x )
             return $x;
             
-        // $jwt = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOm51bGwsImlzcyI6InFGQll5a0puUXEyNVVKaHZLV2VrTFEiLCJleHAiOjE1ODgwNzU0NTUsImlhdCI6MTU4NzQ3MDYzMH0.-zH-b0ZbeLoeN0jNRws212EMI8i89mXFI5Y6uSQW7iY';
         if (! $this->_jwt)
             $this->generateJWT();
 
