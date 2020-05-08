@@ -25,6 +25,7 @@
 $require_admin = true;
 require_once '../../include/baseTheme.php';
 require_once 'modules/tc/functions.php';
+require_once 'modules/tc/TcServer.php';
 
 $toolName = $langBBBConf;
 $navigation[] = array('url' => 'index.php', 'name' => $langAdmin);
@@ -60,7 +61,7 @@ if (isset($_GET['delete_server'])) {
     $id = getDirectReference($_GET['delete_server']);
     Database::get()->querySingle("DELETE FROM tc_servers WHERE id=?d", $id);
     Session::Messages($langFileUpdatedSuccess, 'alert-success');
-    redirect_to_home_page('modules/admin/bbbmoduleconf.php');
+    redirect_to_home_page('modules/admin/tcmoduleconf.php');
 }
 else if (isset($_POST['submit'])) { // PROCESS CREATE / EDIT
     $key = $_POST['key_form'];

@@ -40,6 +40,7 @@ require_once '../../include/baseTheme.php';
 require_once 'include/sendMail.inc.php';
 require_once 'include/log.class.php'; // for logging
 require_once 'functions.php';
+require_once 'f_session.php';
 
 require_once 'include/lib/modalboxhelper.class.php';
 ModalBoxHelper::loadModalBox();
@@ -59,7 +60,7 @@ load_js('select2');
 
 $head_content .= '<script type="text/javascript" src="tc.js"></script>';
 
-$tc_types = tc_configured_apis(); //all available apis globally
+$tc_types = array_keys(TcApi::AVAILABLE_APIS); //all available apis globally
 $tc_session_helper = new TcSessionHelper($course_id,$course_code,$tc_types);
 $isactiveserver = $tc_session_helper->is_active_tc_server();
 

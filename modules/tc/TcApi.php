@@ -3,7 +3,7 @@ require_once "paramsTrait.php";
 
 abstract class TcApi
 {
-
+    //TODO: Set this up in config, needs admin UI additions
     const AVAILABLE_APIS = [
         'bbb' => 'BigBlueButton',
         'om' => 'OpenMeetings',

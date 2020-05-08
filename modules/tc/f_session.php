@@ -31,7 +31,7 @@ class TcSessionHelper
         $this->course_id = $course_id;
 
         if (! self::$tc_types_available)
-            self::$tc_types_available = tc_configured_apis();
+            self::$tc_types_available = array_keys(TcApi::AVAILABLE_APIS);
 
         $c = Database::get()->querySingle("SELECT * FROM tc_course_info WHERE course_id=?d", $this->course_id);
         if ($c === null)
