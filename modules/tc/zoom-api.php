@@ -756,6 +756,7 @@ class Zoom extends TcApi
 
     private function generateJWT()
     {
+		//
         $this->_jwt = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOm51bGwsImlzcyI6InFGQll5a0puUXEyNVVKaHZLV2VrTFEiLCJleHAiOjE1ODg3ODA1MzgsImlhdCI6MTU4ODE3NTcwNX0.IUeZvTZsPEDVF57pqGpO5pOSXZCmEbEagKLenyT4bJ4';
         if ($this->_jwt)
             return;
