@@ -81,7 +81,7 @@ else if (isset($_POST['submit'])) { // PROCESS CREATE / EDIT
         $allcourses = 0; // tc server is assigned to specific courses
     }
     
-    echo 'all courses: '.$allcourses;
+    //echo 'all courses: '.$allcourses;
     if (isset($_POST['id_form'])) { //EDIT
         $tc_id = getDirectReference($_POST['id_form']);
         Database::get()->querySingle("UPDATE tc_servers SET server_key = ?s,
