@@ -674,7 +674,7 @@ class TcSessionHelper
         
         //FIXME: This is a problem, if the session was moved to another server or server config changed after a recording was made, it may be irretrievable
         $sessions = Database::get()->queryArray("
-            SELECT tc_session.id, tc_session.course_id AS course_id,tc_session.title, tc_session.description, tc_session.start_date,
+            SELECT tc_session.id, tc_session.course_id,tc_session.title, tc_session.description, tc_session.start_date,
             tc_session.meeting_id, course.prof_names 
             FROM tc_session
             LEFT JOIN course ON tc_session.course_id=course.id 
@@ -701,10 +701,12 @@ class TcSessionHelper
                             // Check if recording already in videolinks and if not insert
                             $c = Database::get()->querySingle("SELECT COUNT(*) AS cnt FROM videolink WHERE url = ?s", $url);
                             if ($c->cnt == 0) {
-                                Database::get()->querySingle("
+                                $x = Database::get()->querySingle("
                                     INSERT INTO videolink (course_id,url,title,description,creator,publisher,date,visible,public)
                                     VALUES (?s,?s,?s,IFNULL(?s,'-'),?s,?s,?t,?d,?d)",$session->course_id, $url, $session->title,
                                     strip_tags($session->description), $session->prof_names, $session->prof_names, $session->start_date, 1, 1);
+                                if ( $x === NULL )
+                                    throw new RuntimeException('Failed to update video link for session '.$session->id);
                                 $msgID[$sessionsCounter] = 2; /* AN EGINE TO INSERT SWSTA PAIRNEI 2 */
                             } else {
                                 if (isset($msgID[$sessionsCounter])) {
