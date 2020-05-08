@@ -740,7 +740,7 @@ class Zoom extends TcApi
         if (is_array($params) && count($params) > 0) {
             if (array_key_exists('server', $params)) {
                 $this->_ApiUrl = $params['server']->api_url;
-				list($this->_ApiKey,$this->_ApiSecret)=explode('.',$params['server']->server_key);
+				list($this->_ApiKey,$this->_ApiSecret)=explode(',',$params['server']->server_key);
 			}
             if (array_key_exists('url', $params))
                 $this->_ApiUrl = $params['url'];
