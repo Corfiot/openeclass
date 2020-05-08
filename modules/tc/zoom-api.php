@@ -1361,7 +1361,7 @@ class TcZoomSession extends TcDbSession
         $pw = $this->_requiredParam('pw', $joinParams);
         $uid = $this->_requiredParam('uid', $joinParams);
 
-        if (($this->mod_pw && $pw != $this->mod_pw) || ($this->mod_att && $pw != $this->att_pw))
+        if ( isset($this->mod_pw) && $pw != $this->mod_pw || isset($this->mod_att) && $pw != $this->att_pw )
             return false; // die('Invalid password');
 
         if ($this->isFull())
