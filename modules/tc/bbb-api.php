@@ -500,6 +500,10 @@ class BigBlueButton extends TcApi
             }
         return $count;
     }
+    
+    public function deleteMeeting($deleteParams) {
+        return true; //STUB
+    }
 }
 
 /**

@@ -20,7 +20,7 @@
  * e-mail: info@openeclass.org
  * ========================================================================
  */
-global $langBBB,$langNewBBBSession,$langBBBRecordUserParticipation,
+global $langBBB,$langNewBBBSession,$langBBBRecordUserParticipation,$langBBBForgetSuccessful,
 $langBBBUpdateSuccessful,$langBBBDeleteSuccessful,$langBBBCreationRoomError,$langBBBConnectionError,$langBBBAddSuccessful;
 global $langModify,$langParticipate,$langGeneralError;
 global $is_editor,$langBack,$uid,$language,$course_id,$course_code;
@@ -171,6 +171,14 @@ if (isset($_GET['add'])) {
         case 'do_delete':
             if ($tc_session->delete()) {
                 Session::Messages($langBBBDeleteSuccessful, 'alert-success');
+            } else {
+                Session::Messages($langGeneralError, 'alert-danger');
+            }
+            redirect_to_home_page("modules/tc/index.php?course=$course_code");
+            break;
+        case 'do_forget':
+            if ($tc_session->forget()) {
+                Session::Messages($langBBBForgetSuccessful, 'alert-success');
             } else {
                 Session::Messages($langGeneralError, 'alert-danger');
             }

@@ -3424,6 +3424,11 @@ $langNewAssignSuccess = "Assignment created successfully!";
 $langAssignmentSubsDeleted = "Assignment's submissions have been deleted";
 $langAllAssignmentSubsDeleted = "All Assignments' submissions have been deleted";
 $langDelError = "Assignment was not deleted. Please try again.";
+
+
+$langBBBForget = "Forget";
+$langBBBForgetConfirm = "This meeting will be deleted locally, not on the actual service. Are you sure?";
+$langBBBForgetSuccessful = "This meeting has been forgotten (locally deleted)";
 $langBBBServer = "Server";
 $langBBBRecordingNotAvailable = "Recording not available on this server"
 $langBBBRecordingMayNotBeAvailable = "Recording may not be available once a server is assigned";

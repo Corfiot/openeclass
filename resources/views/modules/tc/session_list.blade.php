@@ -51,7 +51,7 @@
                             <span class='text-success'>{{ trans('langNewBBBSessionStart') }}</span>: {{ nice_format($s['start_date'], TRUE) }}<br/>
                         </div>
                         <div style='padding-top: 7px;'>
-                            <span class='text-danger'>{{ trans('langNewBBBSessionEnd') }}</span>: {{ $s['timeLabel'] }}</br></br>
+                            <span class='text-danger'>{{ trans('langNewBBBSessionEnd') }}</span>: {!! $s['timeLabel'] !!}</br></br>
                         </div>
                     </td>
                     <td style='width: 20%'><span class='trunk8'>{{ $s['participants'] }}</span></td>
@@ -59,7 +59,8 @@
                  	@if( $is_editor )
                         <td class='option-btn-cell'>
                         	<?php
-                        	global $langEditChange,$langBBBImportRecordings,$langParticipate,$langActivate,$langDeactivate,$langDelete,$langConfirmDelete;
+                        	global $langEditChange,$langBBBImportRecordings,$langParticipate,$langActivate,
+                        	$langDeactivate,$langDelete,$langConfirmDelete,$langBBBForget,$langBBBForgetConfirm;
                         	?>
                         	{!! action_button(array(
                                 array(
@@ -86,12 +87,26 @@
                                     'icon' => $s['active'] ? 'fa-eye' : 'fa-eye-slash'
                                 ),
                                 array(
+                                    'title' => $langBBBForget,
+                                    'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($s['id']) . "&amp;choice=do_forget",
+                                    'icon' => 'fa-times',
+                                    'class' => 'delete',
+                                    'confirm' => $langBBBForgetConfirm,
+                                    'confirm_title' => $langBBBForget,
+                                    'confirm_button' => $langBBBForget,
+                                    //'show' => $s['identifiable']
+                            	),
+                                array(
                                     'title' => $langDelete,
                                     'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($s['id']) . "&amp;choice=do_delete",
                                     'icon' => 'fa-times',
                                     'class' => 'delete',
-                                    'confirm' => $langConfirmDelete
-                            	))) !!}
+                                    'confirm' => $langConfirmDelete,
+                                    'confirm_title' => $langDelete,
+                                    'confirm_button' => $langDelete,
+                                    'show' => $s['identifiable']
+                            	),
+                            )) !!}
                     	</td>
                  	@else
                         <td class='text-center'>

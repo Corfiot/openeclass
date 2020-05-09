@@ -4917,6 +4917,9 @@ $langCMeta['instructor_add'] = "Προσθήκη διδάσκοντος";
   Messages for Big Blue Button
  * ***************************************** */
 
+$langBBBForget = "Ξέχασέ το";
+$langBBBForgetConfirm = "Η συνάντηση θα διαγραφεί μόνο τοπικά, όχι από την υπηρεσία. Είστε βέβαιος;";
+$langBBBForgetSuccessful = "Η συνάντηση διεγράφη τοπικά";
 $langBBBServer = "Server";
 $langBBBRecordingNotAvailable = "Η καταγραφή δεν είναι διαθέσιμη σε αυτόν τον εξυπηρετητή"
 $langBBBRecordingMayNotBeAvailable = "Η καταγραφή μπορεί να μην είναι διαθέσιμη όταν επιλεχτεί εξυπηρετητής";

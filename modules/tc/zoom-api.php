@@ -38,6 +38,34 @@ trait ArrayObjectInitable
                 $this->{$key} = $val;
             }
         }
+        elseif ( is_object($data) ) { //if it's an object just go through properties and copy over as much as possible
+            foreach($reflect->getProperties() as $reflectprop) {
+                $name = $reflectprop->getName();
+                if ( property_exists($data,$name) ) {
+                    if ( array_key_exists($name,$typeHints) ) {
+                        if ( substr($typeHints[$name],-2) == '[]') { //this is an array of objects
+                            if (is_array($data->{$name}) ) { //could be empty or malformed, ignore it if it is
+                                $classname = substr($typeHints[$name],0,-2);
+                                $this->{$name} = [];
+                                foreach($data->{$name} as $item) { //we know it's an array
+                                    $this->{$name}[] = new $classname($item);
+                                }
+                            }
+                        }
+                        else {
+                            $classname= $typeHints[$name];
+                            $this->{$name} = new $classname($data->{$name});
+                            continue;
+                        }
+                    }
+                    //by default just copy it over
+                    $this->{$name} = $data->{$name};
+                }
+            }
+        }
+        else {
+            die('WUT?');
+        }
     }
 }
 
@@ -238,6 +266,10 @@ class ZoomMeetingSettings
     public function __construct($data)
     {
         $this->init($data);
+    }
+    
+    public function isRecording() {
+        return $this->auto_recording != 'none';
     }
 
     /**
@@ -440,10 +472,11 @@ class ZoomMeeting
 {
     use ArrayObjectInitable;
     
-    public function __construct(array $data)
+    public function __construct($data)
     {
         //echo "\nCONSTRUCT MEETING\n";
         //print_r($data);
+        
         $this->init($data, [
             'settings' => 'ZoomMeetingSettings',
             'tracking_fields' => 'ZoomTrackingField[]',
@@ -724,7 +757,47 @@ class Zoom extends TcApi
                     'body' => 'ZoomMeeting'
                 ]
             ]
-        ]
+        ],
+        'deletemeeting' => [
+            'request' => [
+                'method' => 'DELETE',
+                'url' => 'meetings/{meetingId}',
+                'path' => [
+                    'meetingId:string' //required
+                ],
+                'query' => [
+                    'occurence_id:string',
+                    'schedule_for_reminder:enum(true,false)',
+                ],
+            ],
+            'response' => [
+                '204' => [ 'description' => 'Meeting deleted' ],
+                '400' => [ 'description' => '
+                                Error Code: 1010
+                                User does not belong to this account: {accountId}.
+                                Error Code: 3000
+                                Cannot access meeting information.
+                                Invalid occurrence_id.
+                                Error Code: 3002
+                                Sorry, you cannot delete this meeting since it is in progress.
+                                Error Code: 3003
+                                You are not the meeting host.
+                                Error Code: 3007
+                                Sorry, you cannot delete this meeting since it has ended.
+                                Error Code: 3018
+                                Not allowed to delete PMI.
+                                Error Code: 3037
+                                Not allowed to delete PAC.
+                '],
+                '404' => [ 'description' => '
+                                Meeting not found. Error Code: 1001
+                                User does not exist: {userId}.
+                                Error Code: 3001
+                                Meeting with this {meetingId} is not found or has expired.
+                ']
+            ]
+            
+        ],
     ];
 
     private $_ApiUrl;
@@ -838,49 +911,57 @@ class Zoom extends TcApi
 
     public function SendApiCall($operation, $params)
     {
-        $x = parent::cacheLoad($operation.'_'.implode('_',$params));
+        //echo '<pre>'.__METHOD__.' operation '.$operation.' params:'.var_export($params,true).'</pre>';
+
+        $cachekey = $operation.'_'.md5(serialize($params));
+        $x = parent::cacheLoad($cachekey);
         if ( $x )
             return $x;
             
-        if (! $this->_jwt)
-            $this->generateJWT();
-
         $syntax = self::$syntax[$operation];
         $curl = curl_init();
 
         $CURLOPT_URL = $syntax['request']['url'];
         foreach ($syntax['request']['path'] as $pathitem) {
+            echo 'path: '.var_export($pathitem,true);
+            
             $x = explode(':', $pathitem);
             if (is_array($params))
                 $pp = $params[$x[0]];
-            elseif (is_object($params))
+            elseif (is_object($params)) {
                 $pp = $params->{$x[0]};
+                unset($params->{$x[0]}); //get rid of this field
+            }
             $CURLOPT_URL = str_replace('{' . $x[0] . '}', $pp, $CURLOPT_URL);
         }
         $CURLOPT_URL = $this->_ApiUrl . '/' . $CURLOPT_URL;
 
-        // echo "<pre>Request\n";
-        // print_r($syntax['request']);
-        // echo $syntax['request']['method'] . ' URL: ' . $CURLOPT_URL . "\n";
-        // echo '</pre>';
+        
+//         echo "<pre>Request\n";
+//         print_r($syntax['request']);
+//         echo $syntax['request']['method'] . ' URL: ' . $CURLOPT_URL . "\n";
+//         echo '</pre>';
 
         if ( array_key_exists('body',$syntax['request'])) {
-            $request = $this->_processResponse($syntax['request']['body'], $params);
+            //$request = $this->_processResponse($syntax['request']['body'], $params);
+            $request = $params;
+            //unset($request->settings);
+            //unset($request->timezone);
             $request = json_encode($request);
             $request = preg_replace('/,\s*"[^"]+":null|"[^"]+":null,?/', '', $request);
 
-            // echo '<pre>'."\n\n".var_export($request,true)."\n\n</pre>";
-            //  $request = "{\"topic\":\"6666666666666\",\"start_time\":\"2020-04-23T03:55:00\",\"duration\":60,\"timezone\":\"Europe\\\\/Athens\",\"password\":\"ENof6Tr7aq\",\"agenda\":\"Welcome to Teleconference!\",\"settings\":{\"host_video\":0,\"participant_video\":1,\"join_before_host\":1,\"mute_upon_entry\":1,\"use_pmi\":0,\"auto_recording\":\"cloud\",\"enforce_login\":0,\"waiting_room\":1}}";
-            //  echo '<pre>'."\n\n".var_export($request,true)."\n\n</pre>";
-            //  die();
+            echo '<pre>REQUEST TO '.$CURLOPT_URL."\n\n".var_export($request,true)."\n\n</pre>";
+            //die();
             if ($syntax['request']['method'] == 'POST') {
                 curl_setopt($curl, CURLOPT_POSTFIELDS, $request);
             }
         }
+        
+        if (! $this->_jwt)
+            $this->generateJWT();
+            
         curl_setopt_array($curl, array(
-            // CURLOPT_URL => $this->_ApiUrl . $params['url'] . '?' . http_build_query($params),
             CURLOPT_URL => $CURLOPT_URL,
-
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => "",
             CURLOPT_MAXREDIRS => 10,
@@ -907,14 +988,17 @@ class Zoom extends TcApi
             echo "cURL Error:" . $err;
             echo 'CODE: ' . $code;
             echo 'response: ' . $response;
-        } elseif ($response == '') { // empty response
+        /*} elseif ($response == '') { // empty response
             var_dump($response);
             curl_close($curl);
-            throw new \RuntimeException('Curl error: HTTP CODE:' . $code);
+            throw new \RuntimeException('Empty response: HTTP CODE:' . $code);*/
         } else {
-            // echo $operation . ' - code:' . $code . ':' . $response;
+            echo $operation . ' - code:' . $code . ':' . $response;
             if (! array_key_exists($code, $syntax['response'])) {
-                die('Unknown response ' . $response);
+                //die('Unknown response ' . $response);
+                //echo '<pre>'.$response.'</pre>';
+                echo "cURL Error:" . $err;
+                die("Unknown response code: $code - response:".htmlentities($response));
             }
             $response = json_decode($response,true);
 
@@ -927,10 +1011,14 @@ class Zoom extends TcApi
             if (array_key_exists('body', $syntax['response'][$code]) || array_key_exists('headers', $syntax['response'][$code])) {
                 // TODO: Do headers, too
                 $x=$this->_processResponse($syntax['response'][$code]['body'], $response);
-                parent::cacheStore($operation.'_'.implode('_',$params),$x);
+                parent::cacheStore($cachekey,$x);
                 return $x;
+            }
+            elseif ( $response == '')
+            {
+                return true; //nothing returned and nothing expected -> all good
             } else {
-                return false; // whoops, nothing to return!
+                return false; //nothing expected but something returned -> oops
             }
         }
         curl_close($curl);
@@ -964,10 +1052,14 @@ class Zoom extends TcApi
     public function createMeeting($creationParams)
     {
         echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        $creationParams['operation'] = 'createmeeting';
-        $creationParams['userId'] = 'me';
-        $parms = new ZoomMeeting($creationParams);
-        $x = $this->SendApiCall('createmeeting', $parms);
+
+        //echo '<hr><pre>PARAMS:'.var_export($creationParams,true).'</pre>';
+        $newmeeting = new ZoomMeeting($creationParams);
+        //echo '<hr><pre>NEWMEETING:'.var_export($newmeeting,true).'</pre>';
+        
+        //$creationParams['userId'] = 'me';
+        $newmeeting->userId = 'me';
+        $x = $this->SendApiCall('createmeeting', $newmeeting);
         return $x ? $x : false;
     }
 
@@ -994,20 +1086,6 @@ class Zoom extends TcApi
             return $x->join_url;
     }
 
-    /*
-     * USAGE:
-     * $endParams = array (
-     * 'meetingId' => '1234', -- REQUIRED - The unique id for the meeting
-     * 'password' => 'mp' -- REQUIRED - The moderator password for the meeting
-     * );
-     */
-    public function getEndMeetingURL($endParams)
-    {
-        echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        die('unimplemented');
-        return true;
-    }
-
     public function endMeeting($endParams)
     {
         echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
@@ -1015,17 +1093,15 @@ class Zoom extends TcApi
         return true;
     }
 
-    /*
-     * USAGE:
-     * $meetingId = '1234' -- REQUIRED - The unique id for the meeting
-     */
-    public function getIsMeetingRunningUrl($meetingId)
-    {
+    public function deleteMeeting($deleteParams) {
         echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        die('unimplemented');
+        
+        $x = $this->SendApiCall('deletemeeting', $deleteParams);
+        if ( !$x )
+            return false;
         return true;
     }
-
+    
     /**
      *
      * @param string $meetingId
@@ -1042,17 +1118,6 @@ class Zoom extends TcApi
         return $x->status=='started'; //waiting=not started, finished=started and finished
     }
 
-    /*
-     * Simply formulate the getMeetings URL
-     * We do this in a separate function so we have the option to just get this
-     * URL and print it if we want for some reason.
-     */
-    public function getGetMeetingsUrl()
-    {
-        echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        die('unimplemented');
-        return true;
-    }
 
     public function getMeetings()
     {
@@ -1064,20 +1129,6 @@ class Zoom extends TcApi
         ]);
         return $x ? $x : false;
         // die('unimplemented');
-        return true;
-    }
-
-    /*
-     * USAGE:
-     * $infoParams = array(
-     * 'meetingId' => '1234', -- REQUIRED - The unique id for the meeting
-     * 'password' => 'mp' -- REQUIRED - The moderator password for the meeting
-     * );
-     */
-    public function getMeetingInfoUrl($infoParams)
-    {
-        echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        die('unimplemented');
         return true;
     }
 
@@ -1094,46 +1145,6 @@ class Zoom extends TcApi
         return $x ? $x : false;
     }
 
-    /*
-     * $result = array(
-     * 'returncode' => $xml->returncode,
-     * 'meetingName' => $xml->meetingName,
-     * 'meetingId' => $xml->meetingID,
-     * 'createTime' => $xml->createTime,
-     * 'voiceBridge' => $xml->voiceBridge,
-     * 'attendeePw' => $xml->attendeePW,
-     * 'moderatorPw' => $xml->moderatorPW,
-     * 'running' => $xml->running,
-     * 'recording' => $xml->recording,
-     * 'hasBeenForciblyEnded' => $xml->hasBeenForciblyEnded,
-     * 'startTime' => $xml->startTime,
-     * 'endTime' => $xml->endTime,
-     * 'participantCount' => $xml->participantCount,
-     * 'maxUsers' => $xml->maxUsers,
-     * 'moderatorCount' => $xml->moderatorCount,
-     * );
-     * // Then interate through attendee results and return them as part of the array:
-     * foreach ($xml->attendees->attendee as $a) {
-     * $result[] = array(
-     * 'userId' => $a->userID,
-     * 'fullName' => $a->fullName,
-     * 'role' => $a->role
-     * );
-     * }
-     */
-
-    /*
-     * USAGE:
-     * $recordingParams = array(
-     * 'meetingId' => '1234', -- OPTIONAL - comma separate if multiple ids
-     * );
-     */
-    public function getRecordingsUrl($recordingParams)
-    {
-        echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        die('unimplemented');
-        return true;
-    }
 
     public function getRecordings($recordingParams)
     {
@@ -1142,58 +1153,8 @@ class Zoom extends TcApi
         return true;
     }
 
-    /*
-     * foreach ($xml->recordings->recording as $r) {
-     * $result[] = array(
-     * 'recordId' => $r->recordID,
-     * 'meetingId' => $r->meetingID,
-     * 'name' => $r->name,
-     * 'published' => $r->published,
-     * 'startTime' => $r->startTime,
-     * 'endTime' => $r->endTime,
-     * 'playbackFormatType' => $r->playback->format->type,
-     * 'playbackFormatUrl' => $r->playback->format->url,
-     * 'playbackFormatLength' => $r->playback->format->length,
-     * 'metadataTitle' => $r->metadata->title,
-     * 'metadataSubject' => $r->metadata->subject,
-     * 'metadataDescription' => $r->metadata->description,
-     * 'metadataCreator' => $r->metadata->creator,
-     * 'metadataContributor' => $r->metadata->contributor,
-     * 'metadataLanguage' => $r->metadata->language,
-     * // Add more here as needed for your app depending on your
-     * // use of metadata when creating recordings.
-     * );
-     * }
-     */
-
-    /*
-     * USAGE:
-     * $recordingParams = array(
-     * 'recordId' => '1234', -- REQUIRED - comma separate if multiple ids
-     * 'publish' => 'true', -- REQUIRED - boolean: true/false
-     * );
-     */
-    public function getPublishRecordingsUrl($recordingParams)
-    {
-        echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        die('unimplemented');
-        return true;
-    }
 
     public function publishRecordings($recordingParams)
-    {
-        echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        die('unimplemented');
-        return true;
-    }
-
-    /*
-     * USAGE:
-     * $recordingParams = array(
-     * 'recordId' => '1234', -- REQUIRED - comma separate if multiple ids
-     * );
-     */
-    public function getDeleteRecordingsUrl($recordingParams)
     {
         echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
         die('unimplemented');
@@ -1314,9 +1275,27 @@ class TcZoomSession extends TcDbSession
      */
     function delete()
     {
-        // TODO:check if it's running and if so, KILL IT NOW
         echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
+        // TODO:check if it's running and if so, KILL IT NOW
+        $api = new Zoom([
+            'server' => $this->server
+        ]);
+        
+        $x = $api->deleteMeeting(['meetingId'=>$this->meeting_id]);
+/*        if ( !$x )
+            return false;*/
+if ( !$x ) {
+    echo __METHOD__.' deletemeeting returned zero/false.';
+    var_dump($x);
+    die();
+}
+
         return parent::delete(); // delete from DB
+    }
+    
+    function forget() {
+        echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
+        return parent::delete();
     }
 
     /**
@@ -1476,7 +1455,7 @@ class TcZoomSession extends TcDbSession
                                              // 'maxParticipants' => $this->sessionUsers, // not implemented in ZOOM
             'duration' => $duration, // REQUIRED in zoom
                                       // 'meta_category' => '', // Use to pass additional info to BBB server. See API docs.
-            'settings' => new ZoomMeetingSettings([
+            'settings' => [
                 'host_video' => false,
                 'participant_video' => true,
                 'join_before_host' => true,
@@ -1487,7 +1466,7 @@ class TcZoomSession extends TcDbSession
                 'waiting_room' => true
                 // 'contact_name'=>$username
                 // 'contact_email'=>$useremail
-            ])
+            ]
         );
 
         $result = $zoom->createMeeting($creationParams);
@@ -1496,10 +1475,22 @@ class TcZoomSession extends TcDbSession
             return false;
         }
         
-        $x = Database::get()->querySingle('UPDATE tc_session SET `meeting_id`=?s, `mod_pw`=NULL, `att_pw`=?s WHERE id=?d',
-                $result->id, $result->password,$this->session_id);
-        if ( $x === null )
-            die('DB SESSION UPDATE FAILED');
+        //$result = '{"uuid":"jF8pH9uzRZONBUUcFfVP0g==","id":78856799994,"host_id":"KozSavKkS8GnZyINEabHww","topic":"777777777","type":2,"status":"waiting","start_time":"2020-05-09T20:27:00Z","duration":60,"timezone":"Europe/Athens","agenda":"Welcome to Teleconference!","created_at":"2020-05-09T20:37:29Z","start_url":"https://us04web.zoom.us/s/78856799994?zak=eyJ6bV9za20iOiJ6bV9vMm0iLCJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJjbGllbnQiLCJ1aWQiOiJLb3pTYXZLa1M4R25aeUlORWFiSHd3IiwiaXNzIjoid2ViIiwic3R5IjoxMDAsIndjZCI6InVzMDQiLCJjbHQiOjAsInN0ayI6Il9TdzZCZDRocTZpa04zRlk3T09iMzlhMF9KdG55enhfc3ZvZ0dSVnc0MVkuQmdVZ016QkNOa05yYWpCcVRHOTJlSEk1TlRWMVEyOWxVbWRSV0ZscVlUQlRkVkpBTXprMU5UVmxPREV4TkRaaVkyWmhNVFk1WmpSaU4yRXdZVFkyWmpOaVpETTJaR00wTW1aa09EVXpOVEppTldNNFpXWTBPV000T0dJM09UWmpOelJrT1FBTU0wTkNRWFZ2YVZsVE0zTTlBQVIxY3pBMCIsImV4cCI6MTU4OTA2Mzg1MCwiaWF0IjoxNTg5MDU2NjUwLCJhaWQiOiJCbFJEMXRQN1JPV2paVFc3VGpyTWpnIiwiY2lkIjoiIn0.I65dDHUG4Y4ReNLd_W7TAvoxr5E0lHhFtnnq2ygKnSA","join_url":"https://us04web.zoom.us/j/78856799994?pwd=TGpqWXZMZVIwcVlMVUEzV0ZPZzFhQT09","password":"5RSWWn","h323_password":"324434","pstn_password":"324434","encrypted_password":"TGpqWXZMZVIwcVlMVUEzV0ZPZzFhQT09","settings":{"host_video":false,"participant_video":true,"cn_meeting":false,"in_meeting":false,"join_before_host":true,"mute_upon_entry":true,"watermark":false,"use_pmi":false,"approval_type":2,"audio":"voip","auto_recording":"none","enforce_login":false,"enforce_login_domains":"","alternative_hosts":"","close_registration":false,"registrants_confirmation_email":true,"waiting_room":true,"registrants_email_notification":true,"meeting_authentication":false}}';
+        //$result = json_decode($result);
+        //echo "<hr>";
+        //print_r($result);
+        
+        $meeting = new ZoomMeeting($result);
+        //echo "<hr>FINAL MEETING:";print_r($meeting);
+        
+        $this->meeting_id = strval($meeting->id); //api returns meetingid as Long, get rid of ".0" at end
+        $this->mod_pw = NULL;
+        $this->att_pw = $meeting->password;
+        $this->record = $meeting->settings->isRecording();
+        
+        $x = $this->save();  
+        if ( !$x  )
+            die('['.__METHOD__.'] DB SESSION INSERT FAILED');
 
         return true;
     }
@@ -1532,4 +1523,9 @@ class TcZoomSession extends TcDbSession
         ]);
         $bbb->clearCaches();
     }
+    
+    public function isIdentifiableToRemote() {
+        return $this->meeting_id ; //if we have a meeting id, we can manipulate this session
+    }
+    
 }

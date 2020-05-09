@@ -68,6 +68,13 @@ abstract class TcApi
      */
     public abstract function endMeeting($endParams);
 
+    
+    /**
+     * Delete a meeting, this usually means delete a scheduled meeting. Service may forcefully end a live meeting.
+     * @param unknown $deleteParams
+     */
+    public abstract function deleteMeeting($deleteParams);
+    
     /*
      *
      * @param string $meetingId
@@ -238,6 +245,8 @@ abstract class TcSession
         $this->is_new = false;
         return true;
     }
+    
+    public abstract function isIdentifiableToRemote();
 }
 
 /**
@@ -245,7 +254,7 @@ abstract class TcSession
  * @author User
  *        
  */
-abstract class TcDbSession extends TcSession
+class TcDbSession extends TcSession
 {
     use paramsTrait;
 
@@ -314,9 +323,11 @@ abstract class TcDbSession extends TcSession
             if ( property_exists($this->data,$name))
                 return $this->data->$name;
 
-        throw new RuntimeException(__METHOD__.' Nothing to get for '.$name.'!'); //to check for existence of a variable use the function
+        return NULL;
+        //throw new RuntimeException(__METHOD__.' Nothing to get for '.$name.'!');
     }
     
+    //to check for existence of a variable use the function, dont do [ if $blah->property ]
     public function __isset($name)
     {
         return ($this->data && isset($this->data->$name));
@@ -332,12 +343,21 @@ abstract class TcDbSession extends TcSession
     
     public function __set($name, $value)
     {
-        if (isset($this->$name))
+        if ( $name == 'meeting_id' ) {
+            $this->meeting_id = $value;
+            if ( $this->data )
+                $this->data->meeting_id = $value;
+        }
+        
+        if ( property_exists($this,$name) )
             $this->$name = $value;
         elseif ($this->data) {
             $this->data->$name = $value;
-        } else
-            throw new RuntimeException('Setting session data with not data object.');
+        } else {
+            //throw new RuntimeException('Setting session data with not data object.');
+            $this->data = new stdClass();
+            $this->data->$name = $value;
+        }
     }
 
     function __construct(array $params = [])
@@ -355,7 +375,8 @@ abstract class TcDbSession extends TcSession
                 $this->{$n} = $v;
             }
 
-            $this->meeting_id = $this->data->meeting_id;
+            if ( $this->data && property_exists($this->data,'meeting_id') )
+                $this->meeting_id = $this->data->meeting_id;
         }
     }
 
@@ -435,11 +456,15 @@ abstract class TcDbSession extends TcSession
             return false;
         Log::record($this->course_id, MODULE_ID_TC, LOG_DELETE, array(
             'id' => $this->session_id,
-            'title' => $this->tc_title
+            'title' => $this->title
         ));
         unset($this->data);
         unset($this->session_id);
         return true;
+    }
+    
+    function forget() {
+        return $this->delete();
     }
 
     /**
@@ -599,8 +624,8 @@ abstract class TcDbSession extends TcSession
                                                             record = ?s,
                                                             sessionUsers = ?d", 
                 $this->course_id, $this->title, $this->description, $this->start_date, $this->end_date, $this->public ? '1' : '0', $this->active ? '1' : '0', 
-                $this->running_at, $this->meeting_id, $this->mod_pw, $this->att_pw, $this->unlock_interval, $this->external_users, $this->running_at, 
-                $this->participants, $this->record ? 'true' : 'false', $this->sessionUsers);
+                $this->running_at, $this->meeting_id, $this->mod_pw, $this->att_pw, $this->unlock_interval, $this->external_users, 
+                $this->participants, ($this->record ? 'true' : 'false'), $this->sessionUsers);
 
             if (! $q)
                 return false;
@@ -631,6 +656,16 @@ abstract class TcDbSession extends TcSession
                 return false;
         }
     }
+    
+    public function isIdentifiableToRemote() {
+        return !empty($this->meeting_id); //if we have a meeting id, we can manipulate this session
+    }
+    
+    public function join_user(array $joinParams)
+    {
+        return false; //Can't join a user to database session
+    }
+    
 }
 
 

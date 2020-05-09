@@ -60,7 +60,7 @@ class TcSessionHelper
             require_once $q->type . '-api.php';
         }
         else { //probably null running_at field
-            throw new RuntimeException('Failed to get session '.$id);
+            throw new RuntimeException('Failed to get session #'.$id.'.');
         }
         $classname = 'Tc' . $classname . 'Session';
         $obj = new $classname();
@@ -326,6 +326,7 @@ class TcSessionHelper
         require_once $server->type.'-api.php';
         $classname = 'Tc'. TcApi::AVAILABLE_APIS[$server->type] .'Session';
         $tc_session = new $classname($data);
+        $tc_session->running_at = (int) $server->id; 
         
         //echo "<hr><pre>Actual session:\n".var_export($tc_session->data,true).'</pre>';
         
@@ -342,34 +343,27 @@ class TcSessionHelper
 
             $q = Database::get()->querySingle("SELECT meeting_id, title, mod_pw, att_pw FROM tc_session WHERE id = ?d", $session_id);
         } else { // adding new session
-            //echo "<pre>Actual session:\n".var_export($tc_session,true).'</pre>';
-            die();
-            if (! $tc_session->create_meeting([
-                'meetingId'=>$tc_session->meeting_id,
-                'meetingName'=>$tc_session->title,
-                'attendeePw'=>$tc_session->att_pw,
-                'moderatorPw'=>$tc_session->mod_pw,
-                'maxParticipants'=>$tc_session->sessionUsers,
-                'record'=>$tc_session->record,
-                //'duration'=>$tc_session->???,
-            ]))
+            //echo "<hr><pre>Creation actual session:\n".var_export($tc_session,true).'</pre>';
+            if (! $tc_session->create_meeting() )
                 die('Failed to create/schedule the meeting.');
 
+            
+            //echo '<pre>Session after creation: '.var_export($tc_session,true).'</pre><hr>';
+            //die();
+                
             // logging
             Log::record($this->course_id, MODULE_ID_TC, LOG_INSERT, array(
-                'id' => $q->lastInsertID,
+                'id' => $tc_session->session_id,
                 'title' => $_POST['title'],
                 'desc' => html2text($_POST['desc']),
                 'tc_type' => implode(',',$this->tc_types)
             ));
-
-            $q = Database::get()->querySingle("SELECT meeting_id, title, mod_pw, att_pw FROM tc_session WHERE id = ?d", $q->lastInsertID);
         }
         
         //TIME FOR NOTIFICATIONS
         
-        $new_title = $q->title;
-        $new_att_pw = $q->att_pw;
+        $new_title = $tc_session->title;
+        $new_att_pw = $tc_session->att_pw;
         // if we have to notify users for new session
         if ($notifyUsers == "1" && is_array($r_group) and count($r_group) > 0) {
             $recipients = array();
@@ -511,6 +505,23 @@ class TcSessionHelper
                 $tool_content .= "<div class='alert alert-info'><label>$langNote</label>: $langBBBNoteEnableJoin</div>";
             }
             foreach ($result as $row) {
+                
+                //SIGH
+                $row->public = $row->public=='1'?true:false;
+                $row->active = $row->active=='1'?true:false;
+                $row->running_at = intval($row->running_at);
+                $row->record = $row->record=='true'?true:false;
+                $row->sessionUsers = intval($row->sessionUsers);
+                $sid = $row->id;
+                $row = (array) $row;
+                $row['sessionId'] = $sid; //FIXME: hackitty hack hack
+                
+                
+                $row = new TcDbSession($row);
+                //print_r($row);
+                //die();
+
+                    
                 // Allow access to admin
                 $access = $is_editor;
                 
@@ -590,7 +601,8 @@ class TcSessionHelper
                 //description
                 $s['desc'] = isset($row->description) ? $row->description : '';
                 
-                $s['desc'] .= $row->public?'['.$langPublicAccess.']':'';
+                $s['desc'] .= $row->meeting_id? '#'.$row->meeting_id:'???';
+                $s['desc'] .= $row->public?' ['.$langPublicAccess.']':'';
                 
                 // Get participants
                 $participants = '';
@@ -619,6 +631,8 @@ class TcSessionHelper
                 ];
                 
                 $s['active'] = $row->active;
+                $s['meetingid'] =$row->meeting_id;
+                $s['identifiable'] = $row->isIdentifiableToRemote();
                 
                 $viewdata['sessions'][] = $s;
             }
