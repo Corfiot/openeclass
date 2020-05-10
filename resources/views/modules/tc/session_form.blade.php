@@ -11,7 +11,7 @@
                         <div class='radio'>
                         @foreach ($types as $at)
                             <label><input type="checkbox" id="type_{{ $at }}'_button" name="type[]"
-                            	value="{{ $at }}" {{ (in_array($at, $types) ? " checked " : '') }}>{{$at}}
+                            	value="{{ $at }}" {{ (in_array($at, $typesnow) ? " checked " : '') }}>{{$at}}
                            	</label>
                         @endforeach
                         </div>

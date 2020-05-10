@@ -71,7 +71,7 @@ abstract class TcApi
     
     /**
      * Delete a meeting, this usually means delete a scheduled meeting. Service may forcefully end a live meeting.
-     * @param unknown $deleteParams
+     * @param mixed $deleteParams
      */
     public abstract function deleteMeeting($deleteParams);
     
@@ -224,6 +224,9 @@ abstract class TcSession
 
     public abstract function join_user(array $joinParams);
 
+    /**
+     * Create the meeting on the service. This should also eventually update a local record if one is needed (e.g. a database)
+     */
     public abstract function createMeeting();
 
     public abstract function startMeeting();
@@ -258,6 +261,11 @@ class TcDbSession extends TcSession
 {
     use paramsTrait;
 
+    
+    public $id,$course_id,$meeting_id;
+    public $title,$description,$start_date,$end_date,$public,$active,$running_at,$mod_pw,$att_pw,$unlock_interval;
+    public $external_users,$participants,$record,$sessionUsers;
+    
     private $params = [
         'required' => [],
         'optional' => [
@@ -282,13 +290,8 @@ class TcDbSession extends TcSession
         ]
     ];
 
-    private $meeting_id = null;
-
     // TcServer data cache
-    private $server;
-
-    // this is an associative array
-    public $data = false;
+    public $server;
 
     public function LoadById($id = null)
     {
@@ -298,66 +301,28 @@ class TcDbSession extends TcSession
         } else {
             $this->session_id = $id;
         }
-        $this->load();
-        return $this->data ? $this : false;
+        if ($this->load() )
+            return $this;
+        return false;
     }
 
     // FIXME: meeting_id is not a unique identifier across types
     public function LoadByMeetingId($id)
     {
         $this->meeting_id = $id;
-        $this->data = Database::get()->querySingle("SELECT * FROM tc_session WHERE meeting_id = ?d", $this->meeting_id);
-        if ($this->data) {
-            $this->session_id = $this->data->id;
-            return $this;
+        $data = $this->_loadFromDB("SELECT * FROM tc_session WHERE meeting_id = ?d", $this->meeting_id,$this->params);
+        if ($data) {
+            //TODO: Sigh
+            $this->public = $this->public == '1';
+            $this->active = $this->active == '1';
+            $this->record = $this->record == 'true';
+            $this->sessionUsers = (int) $this->sessionUsers;
+            
+            $this->server = TcServer::LoadById($this->running_at);
+            if ( parent::load() )
+                return $this;
         }
         return false;
-    }
-
-    public function __get($name)
-    {
-        if (property_exists($this,$name) )
-            return $this->$name;
-
-        if ( $this->data)
-            if ( property_exists($this->data,$name))
-                return $this->data->$name;
-
-        return NULL;
-        //throw new RuntimeException(__METHOD__.' Nothing to get for '.$name.'!');
-    }
-    
-    //to check for existence of a variable use the function, dont do [ if $blah->property ]
-    public function __isset($name)
-    {
-        return ($this->data && isset($this->data->$name));
-    }
-    
-    public function __unset($name)
-    {
-        if ( propert_exists($this,$name) )
-            unset($this->$name);
-        elseif ( $this->data )
-            unset($this->data->$name);
-    }
-    
-    public function __set($name, $value)
-    {
-        if ( $name == 'meeting_id' ) {
-            $this->meeting_id = $value;
-            if ( $this->data )
-                $this->data->meeting_id = $value;
-        }
-        
-        if ( property_exists($this,$name) )
-            $this->$name = $value;
-        elseif ($this->data) {
-            $this->data->$name = $value;
-        } else {
-            //throw new RuntimeException('Setting session data with not data object.');
-            $this->data = new stdClass();
-            $this->data->$name = $value;
-        }
     }
 
     function __construct(array $params = [])
@@ -374,9 +339,6 @@ class TcDbSession extends TcSession
             foreach ($validparams as $n => $v) {
                 $this->{$n} = $v;
             }
-
-            if ( $this->data && property_exists($this->data,'meeting_id') )
-                $this->meeting_id = $this->data->meeting_id;
         }
     }
 
@@ -458,8 +420,7 @@ class TcDbSession extends TcSession
             'id' => $this->session_id,
             'title' => $this->title
         ));
-        unset($this->data);
-        unset($this->session_id);
+        unset($this->session_id); //ensure we're totally gone in case an idiot reuses this object
         return true;
     }
     
@@ -510,9 +471,13 @@ class TcDbSession extends TcSession
         return $this->IsRunningInDB();
     }
 
+    /**
+     * {@inheritDoc}
+     * @see TcSession::createMeeting()
+     */
     public function createMeeting()
     {
-        return true;
+        return $this->save();
     }
 
     public function startMeeting()
@@ -596,6 +561,7 @@ class TcDbSession extends TcSession
 
     public function save()
     {
+        debug_print_backtrace();
         if ($this->session_id) { // updating/editing session
             $q = Database::get()->querySingle("UPDATE tc_session SET title=?s, description=?s, start_date=?t, end_date=?t,
                                         public=?s, active=?s, running_at=?d, unlock_interval=?d, external_users=?s,running_at=?d,
@@ -629,6 +595,8 @@ class TcDbSession extends TcSession
 
             if (! $q)
                 return false;
+            $this->id = $q->lastInsertID;
+            $this->session_id = $this->id;
         }
         return parent::save();
     }
@@ -636,18 +604,15 @@ class TcDbSession extends TcSession
     public function load()
     {
         if ($this->session_id) {
-            $q = Database::get()->querySingle("SELECT * FROM tc_session WHERE id=?s", $this->session_id);
+            $q = $this->_loadFromDB("SELECT * FROM tc_session WHERE id=?s", $this->session_id, 
+                array_merge_recursive($this->params['required'],$this->params['optional'])
+             );
             if ( $q  ) {
-                $this->data = $q;
-                
-                if ( $this->data->meeting_id )
-                    $this->meeting_id = $this->data->meeting_id;
-                
                 //TODO: Sigh
-                $this->data->public = $this->data->public == '1';
-                $this->data->active = $this->data->active == '1';
-                $this->data->record = $this->data->record == 'true';
-                $this->data->sessionUsers = (int) $this->data->sessionUsers;
+                $this->public = $this->public == '1';
+                $this->active = $this->active == '1';
+                $this->record = $this->record == 'true';
+                $this->sessionUsers = (int) $this->sessionUsers;
                 
                 $this->server = TcServer::LoadById($this->running_at);
                 return parent::load();

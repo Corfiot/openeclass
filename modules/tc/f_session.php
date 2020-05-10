@@ -88,32 +88,32 @@ class TcSessionHelper
         $found_selected = false;
 
         if ($session) { // edit session details
-            $row = $session;
-            $status = ($row->active == 1 ? 1 : 0);
-            $record = ($row->record == "true" ? true : false);
-            // $running_at = $row->running_at; -- UNUSED
-            $unlock_interval = $row->unlock_interval;
-            $r_group = explode(",", $row->participants);
+            $typesnow = [ $session->server->type ];
+            $status = ($session->active? 1 : 0);
+            $record = $session->record;
+            // $running_at = $session->running_at; -- UNUSED
+            $unlock_interval = $session->unlock_interval;
+            $r_group = explode(",", $session->participants);
 
-            $start_date = DateTime::createFromFormat('Y-m-d H:i:s', $row->start_date);
-            if ( $row->start_date == '0000-00-00 00:00:00' || $start_date === FALSE)
+            $start_date = DateTime::createFromFormat('Y-m-d H:i:s', $session->start_date);
+            if ( $session->start_date == '0000-00-00 00:00:00' || $start_date === FALSE)
                 $start_session = NULL;
             else
                 $start_session = q($start_date->format('d-m-Y H:i'));
             
             
-            $end_date = DateTime::createFromFormat('Y-m-d H:i:s', $row->end_date);
-            if ( $row->end_date == '0000-00-00 00:00:00' || $end_date === FALSE)
+            $end_date = DateTime::createFromFormat('Y-m-d H:i:s', $session->end_date);
+            if ( $session->end_date == '0000-00-00 00:00:00' || $end_date === FALSE)
                 $BBBEndDate = NULL;
             else
                 $BBBEndDate = $end_date->format('d-m-Y H:i');
             
             $enableEndDate = Session::has('BBBEndDate') ? Session::get('BBBEndDate') : ($BBBEndDate ? 1 : 0);
 
-            $textarea = rich_text_editor('desc', 4, 20, $row->description);
-            $value_title = q($row->title);
-            $value_session_users = $row->sessionUsers;
-            $data_external_users = trim($row->external_users);
+            $textarea = rich_text_editor('desc', 4, 20, $session->description);
+            $value_title = q($session->title);
+            $value_session_users = $session->sessionUsers;
+            $data_external_users = trim($session->external_users);
             if ($data_external_users) {
                 $init_external_users = json_encode(array_map(function ($item) {
                         $item = trim($item);
@@ -131,6 +131,7 @@ class TcSessionHelper
             $value_message = $langModify;
             $server = TcServer::LoadOneByCourse($this->course_id); // Find the server for this course as previously assigned. This may return false
         } else { // creating new session: set defaults
+            $typesnow = [];
             $record = false;
             $status = 1;
             $unlock_interval = '10';
@@ -205,6 +206,7 @@ class TcSessionHelper
         //$tool_content .= "<option value='0'><h2>$langAllUsers</h2></option>";
         
         $data = [
+            'typesnow' => $typesnow,
             'types' => $this->tc_types,
             'title' => $value_title,
             'desc' => $textarea,
@@ -330,10 +332,11 @@ class TcSessionHelper
         
         //echo "<hr><pre>Actual session:\n".var_export($tc_session->data,true).'</pre>';
         
-        //TODO: This should update the remote side as well
-        $tc_session->save(); 
         
         if ($session_id != 0) { // updating/editing session
+            //TODO: This should update the remote side as well
+            $tc_session->save();
+            
             // logging
             Log::record($this->course_id, MODULE_ID_TC, LOG_MODIFY, array(
                 'id' => $session_id,
@@ -344,6 +347,8 @@ class TcSessionHelper
             $q = Database::get()->querySingle("SELECT meeting_id, title, mod_pw, att_pw FROM tc_session WHERE id = ?d", $session_id);
         } else { // adding new session
             //echo "<hr><pre>Creation actual session:\n".var_export($tc_session,true).'</pre>';
+            
+            //create_meeting also updates the database via TcDbSession so no need for save() here
             if (! $tc_session->create_meeting() )
                 die('Failed to create/schedule the meeting.');
 
@@ -501,10 +506,9 @@ class TcSessionHelper
                                                     WHERE course_id = ?d $activeClause
                                                     ORDER BY start_date DESC", $this->course_id);
         if ($result) {
-            if ((! $is_editor) and $isActiveTcServer) {
-                $tool_content .= "<div class='alert alert-info'><label>$langNote</label>: $langBBBNoteEnableJoin</div>";
-            }
             foreach ($result as $row) {
+                $serverid = $row->serverid;
+                $servertype = $row->type;
                 
                 //SIGH
                 $row->public = $row->public=='1'?true:false;
@@ -512,10 +516,11 @@ class TcSessionHelper
                 $row->running_at = intval($row->running_at);
                 $row->record = $row->record=='true'?true:false;
                 $row->sessionUsers = intval($row->sessionUsers);
+                
+                //FIXME: hackitty hack hack
                 $sid = $row->id;
                 $row = (array) $row;
-                $row['sessionId'] = $sid; //FIXME: hackitty hack hack
-                
+                $row['sessionId'] = $sid; 
                 
                 $row = new TcDbSession($row);
                 //print_r($row);
@@ -626,8 +631,8 @@ class TcSessionHelper
 
                 //Server information
                 $s['serverinfo'] = [
-                    'id'=>$row->serverid,
-                    'type'=>$row->type
+                    'id'=>$serverid,
+                    'type'=>$servertype
                 ];
                 
                 $s['active'] = $row->active;

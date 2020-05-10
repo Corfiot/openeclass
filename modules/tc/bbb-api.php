@@ -696,8 +696,8 @@ class TcBigBlueButtonSession extends TcDbSession
      */
     function create_meeting()
     {
-        echo 'BBB meeting creation is a stub<br>';
-        return true;
+        //BBB meeting creation is a stub
+        return parent::createMeeting();
     }
 
     /**
@@ -785,11 +785,11 @@ class TcBigBlueButtonSession extends TcDbSession
     public function save()
     {
         if (! $this->mod_pw)
-            $this->data->mod_pw = BigBluebutton::generatePassword();
+            $this->mod_pw = BigBluebutton::generatePassword();
         if (! $this->att_pw)
-            $this->data->att_pw = BigBluebutton::generatePassword();
+            $this->att_pw = BigBluebutton::generatePassword();
         if (! $this->meeting_id)
-            $this->meeting_id = $this->data->meeting_id = BigBlueButton::generateMeetingId();
+            $this->meeting_id = BigBlueButton::generateMeetingId();
         
         return parent::save();
     }

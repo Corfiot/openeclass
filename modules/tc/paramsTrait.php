@@ -132,4 +132,23 @@ trait paramsTrait
      * }
      * }
      */
+    
+    private function _loadFromDB($query,$pk,$params) {
+        $data = Database::get()->querySingle($query, $pk);
+        if ( $data ) {
+            //print_r($data);
+            //print_r($params);
+            foreach ($params as $x=>$y) {
+                if ( is_numeric($x) ) $x = $y;
+                $x = explode(':',$x);
+                //echo '<br>name: '.$x[0].' -- '.$data->{$x[0]};
+                $this->{$x[0]} = $data->{$x[0]};
+            }
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    
 }

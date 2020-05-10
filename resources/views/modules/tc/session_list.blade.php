@@ -1,3 +1,4 @@
+
 @extends('layouts.default')
 
 @section('content')
@@ -10,6 +11,10 @@
             {{ trans('langBBBNotServerAvailableStudent') }}
         @endif
         </div>
+    @else
+        @if (!$is_editor )
+            <div class='alert alert-info'><label>{{ trans('langNote') }}</label>: {{ trans('langBBBNoteEnableJoin') }}</div>";
+        @endif
     @endif
     
     @if ( count($sessions) == 0 )
@@ -58,52 +63,48 @@
                     <td>#{{ $s['serverinfo']['id'] }} <br> {{ $s['serverinfo']['type'] }}</td>
                  	@if( $is_editor )
                         <td class='option-btn-cell'>
-                        	<?php
-                        	global $langEditChange,$langBBBImportRecordings,$langParticipate,$langActivate,
-                        	$langDeactivate,$langDelete,$langConfirmDelete,$langBBBForget,$langBBBForgetConfirm;
-                        	?>
                         	{!! action_button(array(
                                 array(
-                                    'title' => $langEditChange,
+                                    'title' => trans('langEditChange'),
                                     'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($s['id']) . "&amp;choice=edit",
                                     'icon' => 'fa-edit'
                                 ),
                                 array(
-                                    'title' => $langBBBImportRecordings,
+                                    'title' => trans('langBBBImportRecordings'),
                                     'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($s['id']) . "&amp;choice=import_video",
                                     'icon' => "fa-edit",
                                     //'show' => in_array('bbb', $this->tc_types)
                                 ),
                                 array(
-                                    'title' => $langParticipate,
+                                    'title' => trans('langParticipate'),
                                     'url' => "tcuserduration.php?id=".$s['id'],
                                     'icon' => "fa-clock-o",
                                     //'show' => in_array('bbb', $this->tc_types)
                                 ),
                                 array(
-                                    'title' => $s['active'] ? $langDeactivate : $langActivate,
+                                    'title' => $s['active'] ? trans('langDeactivate') : trans('langActivate'),
                                     'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($s['id']) . 
                                     		"&amp;choice=do_" . ($s['active'] ? 'disable' : 'enable'),
                                     'icon' => $s['active'] ? 'fa-eye' : 'fa-eye-slash'
                                 ),
                                 array(
-                                    'title' => $langBBBForget,
+                                    'title' => trans('langBBBForget'),
                                     'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($s['id']) . "&amp;choice=do_forget",
                                     'icon' => 'fa-times',
                                     'class' => 'delete',
-                                    'confirm' => $langBBBForgetConfirm,
-                                    'confirm_title' => $langBBBForget,
-                                    'confirm_button' => $langBBBForget,
+                                    'confirm' => trans('langBBBForgetConfirm'),
+                                    'confirm_title' => trans('langBBBForget'),
+                                    'confirm_button' => trans('langBBBForget'),
                                     //'show' => $s['identifiable']
                             	),
                                 array(
-                                    'title' => $langDelete,
+                                    'title' => trans('langDelete'),
                                     'url' => "$_SERVER[SCRIPT_NAME]?id=" . getIndirectReference($s['id']) . "&amp;choice=do_delete",
                                     'icon' => 'fa-times',
                                     'class' => 'delete',
-                                    'confirm' => $langConfirmDelete,
-                                    'confirm_title' => $langDelete,
-                                    'confirm_button' => $langDelete,
+                                    'confirm' => trans('langConfirmDelete'),
+                                    'confirm_title' => trans('langDelete'),
+                                    'confirm_button' => trans('langDelete'),
                                     'show' => $s['identifiable']
                             	),
                             )) !!}
@@ -111,7 +112,7 @@
                  	@else
                         <td class='text-center'>
                         @if ( $s['canJoin'] )
-                            {!! icon('fa-sign-in', $langBBBSessionJoin, $joinLink) !!}
+                            {!! icon('fa-sign-in', trans('langBBBSessionJoin'), $joinLink) !!}
                         @else
                             -</td>
                         @endif
