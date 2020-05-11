@@ -487,8 +487,7 @@ class TcSessionHelper
      */
     function tc_session_details()
     {
-        global $is_editor, $uid, $langHasExpiredS, 
-            $langNote, $langBBBNoteEnableJoin,$langDaysLeft,$langAllUsers, $langBBBNoServerForRecording,$langPublicAccess;
+        global $is_editor, $uid, $langHasExpiredS, $langDaysLeft,$langAllUsers, $langBBBNoServerForRecording,$langPublicAccess;
 
         $viewdata['is_editor'] = $is_editor;
             

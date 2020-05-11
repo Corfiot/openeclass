@@ -40,7 +40,7 @@ require_once '../../include/baseTheme.php';
 require_once 'include/sendMail.inc.php';
 require_once 'include/log.class.php'; // for logging
 require_once 'functions.php';
-require_once 'f_session.php';
+require_once 'TcSessionHelper.php';
 
 require_once 'include/lib/modalboxhelper.class.php';
 ModalBoxHelper::loadModalBox();
