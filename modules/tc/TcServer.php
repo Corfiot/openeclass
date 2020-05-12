@@ -4,14 +4,23 @@ require_once "TcApi.php";
 
 class TcServer
 {
+    public $id,$type,$hostname,$ip,$port,$enabled,$server_key,$username,$password;
+    public $api_url,$webapp,$max_rooms,$max_users,$enable_recordings,$weight,$screenshare,$all_courses;
 
-    private $data = false;
-
-    // this is an associative array
-    public function __construct(StdClass $data)
+    public function __construct($data)
     {
-        if ($data)
-            $this->data = $data;
+        if ( is_object($data)) {
+            $me = new ReflectionClass($this);
+            foreach ($me->getProperties() as $property)
+            {
+                $propname = $property->getName();
+                if ( property_exists($data,$propname) )
+                    $this->$propname = $data->$propname;
+            }
+        }
+        elseif ( is_array($data) ) {
+            die('['.__METHOD__.'] Initialization by array currently unimplemented.');
+        }
     }
 
     public static function LoadById($id)
@@ -94,28 +103,8 @@ class TcServer
         return $this->data && $this->enabled;
     }
 
-    public function __get($name)
-    {
-        if (! $this->data )
-            return false;
-
-        // Convert to actual booleans
-        if ($name == 'enabled') {
-            return $this->data->enabled == 'true';
-        } elseif ($name == 'enable_recordings') {
-            return $this->data->enable_recordings == 'true';
-        } elseif ($name == 'all_courses')
-            return $this->data->all_courses == '1';
-
-        if (isset($this->data->$name))
-            return $this->data->$name;
-
-        return false;
-    }
-
     public function get_connected_users()
     {
-        //return var_export($this,true);
         $className = TcApi::AVAILABLE_APIS[$this->type];
         require_once $this->type.'-api.php';
         
@@ -129,3 +118,22 @@ class TcServer
         }
     }
 }
+
+
+/*
+ * DB migration:
+ALTER TABLE `tc_servers`
+	CHANGE COLUMN `type` `type` VARCHAR(255) NOT NULL COLLATE 'utf8_general_ci' AFTER `id`,
+	CHANGE COLUMN `hostname` `hostname` VARCHAR(255) NULL COLLATE 'utf8_general_ci' AFTER `type`,
+	CHANGE COLUMN `ip` `ip` VARCHAR(255) NULL COLLATE 'utf8_general_ci' AFTER `hostname`,
+	CHANGE COLUMN `enabled` `enabled` TINYINT(1) NOT NULL DEFAULT '0' COLLATE 'utf8_general_ci' AFTER `port`,
+	CHANGE COLUMN `server_key` `server_key` VARCHAR(255) NOT NULL COLLATE 'utf8_general_ci' AFTER `enabled`,
+	CHANGE COLUMN `api_url` `api_url` VARCHAR(255) NOT NULL COLLATE 'utf8_general_ci' AFTER `password`,
+	CHANGE COLUMN `enable_recordings` `enable_recordings` TINYINT(1) NULL DEFAULT '0' COLLATE 'utf8_general_ci' AFTER `max_users`;
+ALTER TABLE `tc_servers`
+	DROP INDEX `idx_tc_servers`;
+ALTER TABLE `tc_servers`
+	CHANGE COLUMN `port` `port` SMALLINT UNSIGNED NULL DEFAULT NULL AFTER `ip`;
+ALTER TABLE `tc_servers`
+	CHANGE COLUMN `ip` `ip` VARCHAR(255) NULL DEFAULT NULL AFTER `hostname`;
+*/
