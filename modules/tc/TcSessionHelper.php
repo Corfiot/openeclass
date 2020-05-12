@@ -33,13 +33,6 @@ class TcSessionHelper
         if (! self::$tc_types_available)
             self::$tc_types_available = array_keys(TcApi::AVAILABLE_APIS);
 
-/*        $c = Database::get()->querySingle("SELECT * FROM tc_course_info WHERE course_id=?d", $this->course_id);
-        if ($c === null)
-            throw new RuntimeException('Query failed for info table query: ' . $this->course_id);
-        if (!$c)
-            $this->tc_types = self::$tc_types_available;
-        else
-            $this->tc_types = $c->types;*/
         $this->tc_types = self::$tc_types_available;
     }
 
@@ -75,11 +68,11 @@ class TcSessionHelper
      */
     public function form($session = null)
     {
-        global $uid,$start_session;
-        global $langAdd,$BBBEndDate,$langBBBSessionSuggestedUsers2,$langModify,$langAllUsers;
+        global $uid,$start_date;
+        global $langAdd,$end_date,$langBBBSessionSuggestedUsers2,$langModify,$langAllUsers;
 
-        $BBBEndDate = Session::has('BBBEndDate') ? Session::get('BBBEndDate') : "";
-        $enableEndDate = Session::has('enableEndDate') ? Session::get('enableEndDate') : ($BBBEndDate ? 1 : 0);
+        $end_date = Session::has('end_date') ? Session::get('end_date') : "";
+        $enableEndDate = Session::has('enableEndDate') ? Session::get('enableEndDate') : ($end_date ? 1 : 0);
 
         $usercount = Database::get()->querySingle("SELECT COUNT(*) AS count FROM course_user WHERE course_id=?d", $this->course_id)->count;
         if ($usercount > self::MAX_USERS) {
@@ -89,7 +82,7 @@ class TcSessionHelper
 
         if ($session) { // edit session details
             $typesnow = [ $session->server->type ];
-            $status = ($session->active? 1 : 0);
+            $active = $session->active;
             $record = $session->record;
             // $running_at = $session->running_at; -- UNUSED
             $unlock_interval = $session->unlock_interval;
@@ -97,20 +90,20 @@ class TcSessionHelper
 
             $start_date = DateTime::createFromFormat('Y-m-d H:i:s', $session->start_date);
             if ( $session->start_date == '0000-00-00 00:00:00' || $start_date === FALSE)
-                $start_session = NULL;
+                $start_date = NULL;
             else
-                $start_session = q($start_date->format('d-m-Y H:i'));
+                $start_date = q($start_date->format('d-m-Y H:i'));
             
             
             $end_date = DateTime::createFromFormat('Y-m-d H:i:s', $session->end_date);
             if ( $session->end_date == '0000-00-00 00:00:00' || $end_date === FALSE)
-                $BBBEndDate = NULL;
+                $end_date = NULL;
             else
-                $BBBEndDate = $end_date->format('d-m-Y H:i');
+                $end_date = $end_date->format('d-m-Y H:i');
             
-            $enableEndDate = Session::has('BBBEndDate') ? Session::get('BBBEndDate') : ($BBBEndDate ? 1 : 0);
+            $enableEndDate = Session::has('end_date') ? Session::get('end_date') : ($end_date ? 1 : 0);
 
-            $textarea = rich_text_editor('desc', 4, 20, $session->description);
+            $description = rich_text_editor('description', 4, 20, $session->description);
             $value_title = q($session->title);
             $value_session_users = $session->sessionUsers;
             $data_external_users = trim($session->external_users);
@@ -133,14 +126,14 @@ class TcSessionHelper
         } else { // creating new session: set defaults
             $typesnow = [];
             $record = false;
-            $status = 1;
+            $active = 1;
             $unlock_interval = '10';
             $r_group = array();
             $start_date = new DateTime();
-            $start_session = $start_date->format('d-m-Y H:i');
+            $start_date = $start_date->format('d-m-Y H:i');
             $end_date = new DateTime();
-            $BBBEndDate = $end_date->format('d-m-Y H:i');
-            $textarea = rich_text_editor('desc', 4, 20, '');
+            $end_date = $end_date->format('d-m-Y H:i');
+            $description = rich_text_editor('description', 4, 20, '');
             $value_title = '';
             $init_external_users = '';
             $value_session_users = $usercount;
@@ -164,17 +157,15 @@ class TcSessionHelper
         foreach ($res as $r) {
             if (isset($r->id)) {
                 $option['value'] = '_'.$r->id;
-                //$tool_content .= "<option value= '_{$r->id}'";
                 if (in_array(("_{$r->id}"), $r_group)) {
                     $found_selected = true;
                     $option['selected'] = true;
-                    //$tool_content .= ' selected';
                 }
                 $option['text'] = $r->name;
-                //$tool_content .= ">" . q($r->name) . "</option>";
                 $options[] = $option;
             }
         }
+
         // select all users from this course except yourself
         $sql = "SELECT u.id user_id, CONCAT(u.surname,' ', u.givenname) AS name, u.username
                                 FROM user u, course_user cu
@@ -188,14 +179,11 @@ class TcSessionHelper
         foreach ($res as $r) {
             if (isset($r->user_id)) {
                 $option['value'] = $r->user_id;
-                //$tool_content .= "<option value='{$r->user_id}'";
                 if (in_array(("$r->user_id"), $r_group)) {
                     $found_selected = true;
                     $option['selected'] = true;
-                    //$tool_content .= ' selected';
                 }
                 $option['text'] = $r->name. '('.$r->username.')';
-                //$tool_content .= ">" . q($r->name) . " (" . q($r->username) . ")</option>";
                 $options[] = $option;
             }
         }
@@ -209,13 +197,13 @@ class TcSessionHelper
             'typesnow' => $typesnow,
             'types' => $this->tc_types,
             'title' => $value_title,
-            'desc' => $textarea,
-            'start' => $start_session,
-            'end' => $BBBEndDate,
+            'description' => $description,
+            'start_date' => $start_date,
+            'end_date' => $end_date,
             'enableEndDate' => $enableEndDate,
             'server' => $server,
             'record'=> $record,
-            'status'=>$status,
+            'active'=>$active,
             'unlock_interval'=>$unlock_interval,
             'session_users'=>$value_session_users,
             'usercount'=>$usercount,
@@ -226,7 +214,7 @@ class TcSessionHelper
             'init_external_users'=>$init_external_users
         ];
         if ( $session )
-            $data['id'] = getIndirectReference($session->session_id);
+            $data['id'] = getIndirectReference($session->id);
         
         return $data;
     }
@@ -241,14 +229,15 @@ class TcSessionHelper
         $langAvailableBBBServers, $langDescription, $urlServer;
         
         if (isset($_POST['enableEndDate']) and ($_POST['enableEndDate'])) {
-            $endDate_obj = DateTime::createFromFormat('d-m-Y H:i', $_POST['BBBEndDate']);
+            $endDate_obj = DateTime::createFromFormat('d-m-Y H:i', $_POST['end_date']);
             $end = $endDate_obj->format('Y-m-d H:i:s');
         } else {
             $end = NULL;
         }
 
-        $startDate_obj = DateTime::createFromFormat('d-m-Y H:i', $_POST['start_session']);
-        $start = $startDate_obj->format('Y-m-d H:i:s');
+        $startDate_obj = DateTime::createFromFormat('d-m-Y H:i', $_POST['start_date']);
+        $start_date = $startDate_obj->format('Y-m-d H:i:s');
+
         $notifyUsers = $addAnnouncement = $notifyExternalUsers = 0;
         if (isset($_POST['notifyUsers']) and $_POST['notifyUsers']) {
             $notifyUsers = 1;
@@ -259,16 +248,17 @@ class TcSessionHelper
         if (isset($_POST['addAnnouncement']) and $_POST['addAnnouncement']) {
             $addAnnouncement = 1;
         }
-        $record = 'false';
+
+        $record = false;
         if (isset($_POST['record'])) {
-            $record = $_POST['record'];
+            $record = $_POST['record']==1;
         }
+
         if (isset($_POST['external_users'])) {
             $ext_users = implode(',', $_POST['external_users']);
         } else {
             $ext_users = null;
         }
-
         if (isset($_POST['groups'])) {
             $r_group = $_POST['groups'];
             if (is_array($r_group) && count($r_group) > 0) {
@@ -289,28 +279,30 @@ class TcSessionHelper
                 $this->tc_types[] = $t;
             }
         }
+        else {
+            $this->tc_types = array_keys(TcApi::AVAILABLE_APIS);
+        }
         
 
         $data = [
-            'sessionId' => $session_id,
-            
+            'id' => $session_id,
             
             'course_id' => $this->course_id,
-            //'meeting_id' => , //this should be loaded if session_id is valid, otherwise a new one should be generated internally later
             
             'title'=>trim($_POST['title']),
-            'description'=>trim($_POST['desc']),
-            'start_date'=>$start,
+            'description'=>trim($_POST['description']),
+            'start_date'=>$start_date,
             'end_date'=>$end,
             'public'=>true, //FIXME: WHY?
-            'active'=>$_POST['status']=='1',
+            'active'=>$_POST['active']=='1',
             //'running_at'=>????,
+            //'meeting_id' => , //this should be loaded if session_id is valid, otherwise a new one should be generated internally later
             //'mod_pw'=>???,
             //'att_pw'=>???,
             'unlock_interval'=>$_POST['minutes_before'],
             'external_users'=>$ext_users,
             'participants'=>$r_group,
-            'record'=>$record=='true',
+            'record'=>$record,
             'sessionUsers'=>(int) $_POST['sessionUsers'],
         ];
         //echo "<hr><pre>POST:\n".var_export($_POST,true).'</pre>';
@@ -318,7 +310,8 @@ class TcSessionHelper
 
         //Now (re-)/select a server. The type may have changed, so your current server is now invalid.
         //This is done *specifically* by TcDBSession, so we get a server type to use for class instantiation
-        $server = TcDBSession::pickServer($this->tc_types,$this->course_id); 
+        //Find us a server with sessionUsers slots available 
+        $server = TcDBSession::pickServer($this->tc_types,$this->course_id,$data['sessionUsers']);
         if ( !$server ) {
             Session::Messages($langAvailableBBBServers, 'alert-danger');
             return false;
@@ -499,7 +492,7 @@ class TcSessionHelper
         load_js('trunk8');
 
         $myGroups = Database::get()->queryArray("SELECT group_id FROM group_members WHERE user_id=?d", $_SESSION['uid']);
-        $activeClause = $is_editor ? '' : "AND active = '1'";
+        $activeClause = $is_editor ? '' : "AND active = 1";
         $result = Database::get()->queryArray("SELECT tc_session.*,tc_servers.id as serverid,type FROM tc_session
                                                     INNER JOIN tc_servers ON tc_session.running_at=tc_servers.id
                                                     WHERE course_id = ?d $activeClause
@@ -509,17 +502,17 @@ class TcSessionHelper
                 $serverid = $row->serverid;
                 $servertype = $row->type;
                 
-                //SIGH
-                $row->public = $row->public=='1'?true:false;
-                $row->active = $row->active=='1'?true:false;
-                $row->running_at = intval($row->running_at);
-                $row->record = $row->record=='true'?true:false;
-                $row->sessionUsers = intval($row->sessionUsers);
-                
                 //FIXME: hackitty hack hack
                 $sid = $row->id;
                 $row = (array) $row;
-                $row['sessionId'] = $sid; 
+                $row['session_id'] = $sid;
+                
+                //FIXME: DB layer doesn't return TINYINT as integer
+                $row['public'] = (bool) $row['public'];
+                $row['active'] = (bool) $row['active'];
+                $row['running_at'] = intval($row['running_at']);
+                $row['record'] = (bool) $row['record'];
+                $row['sessionUsers'] = intval($row['sessionUsers']);
                 
                 $row = new TcDbSession($row);
                 //print_r($row);
@@ -579,7 +572,7 @@ class TcSessionHelper
                 //Check is we can join the session
                 if (isset($end_date) and ($timeLeft < 0)) {
                     $canJoin = FALSE;
-                } elseif (($row->active == '1') and (date_diff_in_minutes($start_date, date('Y-m-d H:i:s')) < $row->unlock_interval) and $isActiveTcServer) {
+                } elseif (($row->active) and (date_diff_in_minutes($start_date, date('Y-m-d H:i:s')) < $row->unlock_interval) and $isActiveTcServer) {
                     $canJoin = TRUE;
                 } else
                     $canJoin = FALSE;
@@ -595,18 +588,17 @@ class TcSessionHelper
                 if ($row->running_at)
                     $course_server = TcServer::LoadById($row->running_at);
                 else
-                    $record = 'false';
-                if ($record == 'false' or !$course_server->recording()) {
+                    $record = false;
+                if ( !$record or !$course_server->recording()) {
                     $s['warning_message_record'] = "<span class='fa fa-info-circle' data-toggle='tooltip' data-placement='right' title='$langBBBNoServerForRecording".
                         ($course_server->recording()?'':' (server)').
                     "'></span>";
                 }
                 
                 //description
-                $s['desc'] = isset($row->description) ? $row->description : '';
-                
-                $s['desc'] .= $row->meeting_id? '#'.$row->meeting_id:'???';
-                $s['desc'] .= $row->public?' ['.$langPublicAccess.']':'';
+                $s['description'] = isset($row->description) ? $row->description : '';
+                $s['description'] .= $row->meeting_id? '#'.$row->meeting_id:'???';
+                $s['description'] .= $row->public?' ['.$langPublicAccess.']':'';
                 
                 // Get participants
                 $participants = '';
@@ -657,7 +649,7 @@ class TcSessionHelper
 
         if (count($s) > 0) {
             foreach ($s as $data) {
-                if ($data->all_courses == 1) { // tc_server is enabled for all courses
+                if ($data->all_courses ) { // tc_server is enabled for all courses
                     return true;
                 } else { // check if tc_server is enabled for specific course
                     $q = Database::get()->querySingle("SELECT * FROM course_external_server
@@ -772,3 +764,19 @@ function date_diff_in_minutes($start_date, $current_date)
 {
     return round((strtotime($start_date) - strtotime($current_date)) / 60);
 }
+
+
+
+/*
+DB Migration
+ALTER TABLE `tc_session`
+CHANGE COLUMN `public` `public` TINYINT(1) NOT NULL DEFAULT '0' AFTER `end_date`,
+CHANGE COLUMN `active` `active` TINYINT(1) NOT NULL DEFAULT '0' AFTER `public`,
+CHANGE COLUMN `record` `record` TINYINT(1) NULL DEFAULT '0' AFTER `participants`,
+CHANGE COLUMN `start_date` `start_date` DATETIME NOT NULL AFTER `description`,
+CHANGE COLUMN `course_id` `course_id` INT(11) NOT NULL AFTER `id`;
+
+ALTER TABLE `tc_session`
+ADD CONSTRAINT `FK_tc_session_course` FOREIGN KEY (`course_id`) REFERENCES `course` (`id`) ON UPDATE CASCADE ON DELETE CASCADE,
+ADD CONSTRAINT `FK_tc_session_tc_servers` FOREIGN KEY (`running_at`) REFERENCES `tc_servers` (`id`) ON UPDATE CASCADE ON DELETE CASCADE;
+*/

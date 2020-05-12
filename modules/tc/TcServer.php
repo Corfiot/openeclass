@@ -4,7 +4,7 @@ require_once "TcApi.php";
 
 class TcServer
 {
-    public $id,$type,$hostname,$ip,$port,$enabled,$server_key,$username,$password;
+    public $id,$type,$enabled,$server_key,$username,$password;
     public $api_url,$webapp,$max_rooms,$max_users,$enable_recordings,$weight,$screenshare,$all_courses;
 
     public function __construct($data)
@@ -32,7 +32,7 @@ class TcServer
     public static function LoadOneByTypes($types, $enabledOnly = false)
     {
         if ($enabledOnly)
-            $enabledOnly = " AND enabled='true' ";
+            $enabledOnly = " AND enabled=1 ";
 
         if (! is_array($types)) {
             $types = array(
@@ -56,8 +56,9 @@ class TcServer
 
     public static function LoadAllByTypes($types, $enabledOnly = false)
     {
+        
         if ($enabledOnly)
-            $enabledOnly = " AND enabled='true' ";
+            $enabledOnly = " AND enabled=1 ";
 
         if (! is_array($types)) {
             $types = array(
@@ -81,7 +82,7 @@ class TcServer
     public static function LoadAll($enabledOnly = false)
     {
         if ($enabledOnly)
-            $enabledOnly = " WHERE enabled='true' ";
+            $enabledOnly = " WHERE enabled=1 ";
 
         $r = Database::get()->queryArray("SELECT * FROM tc_servers" . $enabledOnly . " ORDER BY weight ASC");
         $s = [];
@@ -95,20 +96,17 @@ class TcServer
 
     public function recording()
     {
-        return $this->data && $this->enable_recordings;
+        return $this->enable_recordings;
     }
 
     public function enabled()
     {
-        return $this->data && $this->enabled;
+        return $this->enabled;
     }
 
     public function get_connected_users()
     {
-        $className = TcApi::AVAILABLE_APIS[$this->type];
-        require_once $this->type.'-api.php';
-        
-        $api = new $className(['server'=>$this]);
+        $api = $this->getApi();
         try {
             $x = $api->getServerUsers($this);
             return $x;
@@ -117,6 +115,25 @@ class TcServer
             return "Error: ".$e->getMessage();
         }
     }
+    
+    public function available($users_to_join=null) {
+        if ( !$this->enabled )
+            return false;
+        if ( $users_to_join !== null ) {
+            $api = $this->getApi();
+            $x = $api->getServerUsers($this);
+            if ( $x )
+                return $this->max_users>$users_to_join;
+            else
+                return true;
+        }
+    }
+        
+    public function getApi() {
+        $className = TcApi::AVAILABLE_APIS[$this->type];
+        require_once $this->type.'-api.php';
+        return new $className(['server'=>$this]);
+    }
 }
 
 
@@ -124,8 +141,6 @@ class TcServer
  * DB migration:
 ALTER TABLE `tc_servers`
 	CHANGE COLUMN `type` `type` VARCHAR(255) NOT NULL COLLATE 'utf8_general_ci' AFTER `id`,
-	CHANGE COLUMN `hostname` `hostname` VARCHAR(255) NULL COLLATE 'utf8_general_ci' AFTER `type`,
-	CHANGE COLUMN `ip` `ip` VARCHAR(255) NULL COLLATE 'utf8_general_ci' AFTER `hostname`,
 	CHANGE COLUMN `enabled` `enabled` TINYINT(1) NOT NULL DEFAULT '0' COLLATE 'utf8_general_ci' AFTER `port`,
 	CHANGE COLUMN `server_key` `server_key` VARCHAR(255) NOT NULL COLLATE 'utf8_general_ci' AFTER `enabled`,
 	CHANGE COLUMN `api_url` `api_url` VARCHAR(255) NOT NULL COLLATE 'utf8_general_ci' AFTER `password`,
@@ -136,4 +151,8 @@ ALTER TABLE `tc_servers`
 	CHANGE COLUMN `port` `port` SMALLINT UNSIGNED NULL DEFAULT NULL AFTER `ip`;
 ALTER TABLE `tc_servers`
 	CHANGE COLUMN `ip` `ip` VARCHAR(255) NULL DEFAULT NULL AFTER `hostname`;
+ALTER TABLE `tc_servers`
+	DROP COLUMN `hostname`,
+	DROP COLUMN `ip`,
+	DROP COLUMN `port`;
 */

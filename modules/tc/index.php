@@ -201,7 +201,7 @@ if (isset($_GET['add'])) {
             redirect_to_home_page("modules/tc/index.php?course=$course_code");
             break;
         case 'do_join':
-            $serv = $tc_session->getRunningServer();
+            $serv = $tc_session->server;
             if (! $serv) {
                 die("This session is not running on any server. I don't know where to check...");
             }

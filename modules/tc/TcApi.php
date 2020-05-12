@@ -190,15 +190,15 @@ abstract class TcApi
 abstract class TcSession
 {
 
-    public $session_id;
+    public $id;
 
     private $is_new = true;
 
     public function __construct($params = [])
     {
         $this->is_new = true;
-        if (array_key_exists('sessionId', $params)) {
-            $this->session_id = $params['sessionId'];
+        if (array_key_exists('id', $params)) {
+            $this->id = $params['id'];
         }
     }
 
@@ -269,7 +269,7 @@ class TcDbSession extends TcSession
     private $params = [
         'required' => [],
         'optional' => [
-            'id' => 'sessionId',
+            'id',
             'course_id',
             'meeting_id',
 
@@ -296,10 +296,10 @@ class TcDbSession extends TcSession
     public function LoadById($id = null)
     {
         if (! $id) {
-            if (! $this->session_id)
+            if (! $this->id)
                 throw new RuntimeException('[TC API] Unable to load session without session id.');
         } else {
-            $this->session_id = $id;
+            $this->id = $id;
         }
         if ($this->load() )
             return $this;
@@ -329,9 +329,9 @@ class TcDbSession extends TcSession
     {
         parent::__construct($params);
 
-        if ($this->session_id) {
+        if ($this->id) {
             if (! $this->load() ) // This fills in $this->data->id (same as session_id)
-                throw new RuntimeException('Failed to load session with id '.$this->session_id);
+                throw new RuntimeException('Failed to load session with id '.$this->id);
         }
 
         if (count($params) > 0) {
@@ -349,8 +349,8 @@ class TcDbSession extends TcSession
      */
     private function getRunningServerId()
     {
-        if ($this->session_id)
-            $res = Database::get()->querySingle("SELECT running_at FROM tc_session WHERE id = ?s", $this->session_id);
+        if ($this->id)
+            $res = Database::get()->querySingle("SELECT running_at FROM tc_session WHERE id = ?s", $this->id);
         elseif ($this->meeting_id)
             $res = Database::get()->querySingle("SELECT running_at FROM tc_session WHERE meeting_id = ?s", $this->meeting_id);
         if ($res) {
@@ -363,64 +363,41 @@ class TcDbSession extends TcSession
 
     /**
      *
-     * @throws Exception
-     * @return TcServer|boolean
-     */
-    public function getRunningServer()
-    {
-        if (! $this->server) {
-            $sid = $this->getRunningServerId();
-            $this->server = TcServer::LoadById($sid);
-            if ($this->server)
-                return $this->server;
-            else
-                throw new Exception("Server not found for id " . $this->server_id);
-        }
-        else
-            return $this->server;
-        return false;
-    }
-
-    /**
-     *
      * @brief Disable bbb session (locally)
-     * @param int $session_id
      * @return bool
      */
     function disable()
     {
-        $x = Database::get()->querySingle("UPDATE tc_session set active='0' WHERE id=?d", $this->session_id);
+        $x = Database::get()->querySingle("UPDATE tc_session set active='0' WHERE id=?d", $this->id);
         return $x !== NULL;
     }
 
     /**
      *
      * @brief enable bbb session (locally)
-     * @param int $session_id
      * @return bool
      */
     function enable()
     {
-        $x = Database::get()->querySingle("UPDATE tc_session SET active='1' WHERE id=?d", $this->session_id);
+        $x = Database::get()->querySingle("UPDATE tc_session SET active='1' WHERE id=?d", $this->id);
         return $x !== NULL;
     }
 
     /**
      *
      * @brief delete bbb sessions (locally)
-     * @param int $session_id
      * @return bool
      */
     function delete()
     {
-        $q = Database::get()->querySingle("DELETE FROM tc_session WHERE id = ?d", $this->session_id);
+        $q = Database::get()->querySingle("DELETE FROM tc_session WHERE id = ?d", $this->id);
         if ($q === null) // false is returned when deletion is successful
             return false;
         Log::record($this->course_id, MODULE_ID_TC, LOG_DELETE, array(
-            'id' => $this->session_id,
+            'id' => $this->id,
             'title' => $this->title
         ));
-        unset($this->session_id); //ensure we're totally gone in case an idiot reuses this object
+        unset($this->id); //ensure we're totally gone in case an idiot reuses this object
         return true;
     }
     
@@ -538,23 +515,37 @@ class TcDbSession extends TcSession
 
     /**
      *
-     *  @brief Pick a server for a session based on all available information for the course. This is specifically a static and used to instantiate descendants
+     *  Pick a server for a session based on all available information for the course. This is specifically a static and used to instantiate descendants
+     *  By default, we only get active servers
      */
-    public static function pickServer($types, $course_id)
+    public static function pickServer($types, $course_id, $users_needed=null)
     {
-        array_walk($types, function (&$value) {
+        $qtypes = $types;
+        array_walk($qtypes, function (&$value) {
             $value = '"' . $value . '"';
         });
-        $types = implode(',', $types);
+        $qtypes = implode(',', $qtypes);
         $t = Database::get()->querySingle("SELECT tcs.* FROM course_external_server ces
                 INNER JOIN tc_servers tcs ON tcs.id=ces.external_server
-                WHERE ces.course_id = ?d AND tcs.type IN(" . $types . ") AND enabled='true'
+                WHERE ces.course_id = ?d AND tcs.type IN(" . $qtypes . ") AND enabled='true'
                 ORDER BY tcs.weight ASC", $course_id);
         if ($t) { // course uses specific tc_servers
-            $server = $t;
+            $server = new TcServer($t);
         } else { // will use default tc_server
-                 // get type first via the servers table
-            $server = Database::get()->querySingle("SELECT * FROM tc_servers WHERE `type` IN(" . $types . ") and enabled = 'true' ORDER BY weight ASC");
+            // Check each available server of these types
+            $r = TcServer::LoadAllByTypes($types, true);
+            if (($r) and count($r) > 0) {
+                foreach ($r as $server) {
+                    //echo 'Checking space for ' . $users_needed. ' users on server ' . $server->id . '/' . $server->api_url . '....<br>';
+                    if ($server->available($users_needed)) { // careful, this is probably an API request on each server
+                        //echo 'Server ' . $server->id . ' is AVAILABLE.' . "\n";
+                        break;
+                    }
+                }
+            } else {
+                //Session::Messages($langBBBConnectionErrorOverload, 'alert-danger');
+                return false;
+            }
         }
         return $server;
     }
@@ -562,13 +553,13 @@ class TcDbSession extends TcSession
     public function save()
     {
         debug_print_backtrace();
-        if ($this->session_id) { // updating/editing session
+        if ($this->id) { // updating/editing session
             $q = Database::get()->querySingle("UPDATE tc_session SET title=?s, description=?s, start_date=?t, end_date=?t,
-                                        public=?s, active=?s, running_at=?d, unlock_interval=?d, external_users=?s,running_at=?d,
-                                        participants=?s, record=?s, sessionUsers=?d WHERE id=?d", 
-                $this->title, $this->description, $this->start_date, $this->end_date, $this->public ? '1' : '0', $this->active ? '1' : '0', 
-                $this->running_at, $this->unlock_interval, $this->external_users, $this->running_at, $this->participants, ($this->record ? 'true' : 'false'),
-                $this->sessionUsers, $this->session_id);
+                                        public=?b, active=?b, running_at=?d, unlock_interval=?d, external_users=?s,running_at=?d,
+                                        participants=?s, record=?b, sessionUsers=?d WHERE id=?d", 
+                $this->title, $this->description, $this->start_date, $this->end_date, $this->public, $this->active, 
+                $this->running_at, $this->unlock_interval, $this->external_users, $this->running_at, $this->participants, $this->record,
+                $this->sessionUsers, $this->id);
             
             if ($q === NULL )
                 return false;
@@ -578,8 +569,8 @@ class TcDbSession extends TcSession
                                                             description = ?s,
                                                             start_date = ?t,
                                                             end_date = ?t,
-                                                            public = ?s,
-                                                            active = ?s,
+                                                            public = ?b,
+                                                            active = ?b,
                                                             running_at = ?d,
                                                             meeting_id = ?s,
                                                             mod_pw = ?s,
@@ -587,33 +578,26 @@ class TcDbSession extends TcSession
                                                             unlock_interval = ?d,
                                                             external_users = ?s,
                                                             participants = ?s,
-                                                            record = ?s,
+                                                            record = ?b,
                                                             sessionUsers = ?d", 
-                $this->course_id, $this->title, $this->description, $this->start_date, $this->end_date, $this->public ? '1' : '0', $this->active ? '1' : '0', 
+                $this->course_id, $this->title, $this->description, $this->start_date, $this->end_date, $this->public, $this->active, 
                 $this->running_at, $this->meeting_id, $this->mod_pw, $this->att_pw, $this->unlock_interval, $this->external_users, 
-                $this->participants, ($this->record ? 'true' : 'false'), $this->sessionUsers);
+                $this->participants, $this->record, $this->sessionUsers);
 
             if (! $q)
                 return false;
             $this->id = $q->lastInsertID;
-            $this->session_id = $this->id;
         }
         return parent::save();
     }
 
     public function load()
     {
-        if ($this->session_id) {
-            $q = $this->_loadFromDB("SELECT * FROM tc_session WHERE id=?s", $this->session_id, 
+        if ($this->id) {
+            $q = $this->_loadFromDB("SELECT * FROM tc_session WHERE id=?s", $this->id, 
                 array_merge_recursive($this->params['required'],$this->params['optional'])
              );
             if ( $q  ) {
-                //TODO: Sigh
-                $this->public = $this->public == '1';
-                $this->active = $this->active == '1';
-                $this->record = $this->record == 'true';
-                $this->sessionUsers = (int) $this->sessionUsers;
-                
                 $this->server = TcServer::LoadById($this->running_at);
                 return parent::load();
             }

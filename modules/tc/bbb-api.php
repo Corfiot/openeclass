@@ -696,23 +696,14 @@ class TcBigBlueButtonSession extends TcDbSession
      */
     function create_meeting()
     {
-        //BBB meeting creation is a stub
+        //FIXME: BBB meeting creation is a stub
         return parent::createMeeting();
     }
 
     /**
      *
      * @global type $course_code
-     * @global type $langBBBCreationRoomError
-     * @global type $langBBBConnectionError
-     * @global type $langBBBConnectionErrorOverload
      * @global type $langBBBWelcomeMsg
-     * @param string $title
-     * @param string $meeting_id
-     * @param string $mod_pw
-     * @param string $att_pw
-     * @param string $record
-     *            'true' or 'false'
      */
     function start_meeting()
     {
@@ -724,29 +715,15 @@ class TcBigBlueButtonSession extends TcDbSession
         } else { // otherwise just count participants
             $users_to_join = $this->usersToBeJoined(); // this is DB-expensive so call before the loop
         }
-
-        /*
-         * // At this point we must start the meeting on a new server if a higher priority slot has opened...
-         * // no matter what the previous assigned server was, therefore...
-         * // Check each available server of this type
-         * $r = TcServer::LoadAllByTypes(['bbb'], true);
-         * if (($r) and count($r) > 0) {
-         * foreach ($r as $server) {
-         * echo 'Checking space for ' . $users_to_join . ' users on server ' . $server->id . '/' . $server->api_url . '....<br>';
-         * if ($server->available($users_to_join)) { // careful, this is an API request on each server
-         * echo 'Server ' . $server->id . ' is AVAILABLE.' . "\n";
-         * break;
-         * }
-         * }
-         * } else {
-         * //Session::Messages($langBBBConnectionErrorOverload, 'alert-danger');
-         * return false;
-         * }
-         *
-         * // Move the session even if the server won't let us set it up, we can use this to check the last server chosen
-         * Database::get()->query("UPDATE tc_session SET running_at = ?d WHERE meeting_id = ?s", $server->id, $this->meeting_id);
-         */
-
+        
+        $server = $this->pickServer($this->tc_types, $this->course_id, $users_to_join);
+        if ( !$server )
+            return false;
+        
+        // Move the session even if the server won't let us set it up, we can use this to check the last server chosen
+        $this->server = $server;
+        $this->save(); //should be smart enough to update and not insert
+        
         $duration = 0;
         if (($this->start_date != null) and ($this->end_date != null)) {
             $date_start = new DateTime($this->start_date);
@@ -756,9 +733,8 @@ class TcBigBlueButtonSession extends TcDbSession
             $duration = $hour_duration * 60 + $min_duration;
         }
 
-        $server = TcServer::LoadById($this->running_at);
         $bbb = new BigBlueButton([
-            'server' => $server
+            'server' => $this->server
         ]);
 
         $creationParams = array(

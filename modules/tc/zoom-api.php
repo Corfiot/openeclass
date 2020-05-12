@@ -671,7 +671,6 @@ if ( !$x ) {
     public function join_user(array $joinParams)
     {
         echo '[ZOOMAPI] ' . __METHOD__ . '<br>';
-        $this->getRunningServer();
 
         $fullname = $this->_requiredParams([
             'username',
@@ -680,7 +679,7 @@ if ( !$x ) {
         $pw = $this->_requiredParam('pw', $joinParams);
         $uid = $this->_requiredParam('uid', $joinParams);
 
-        if ( isset($this->mod_pw) && $pw != $this->mod_pw || isset($this->mod_att) && $pw != $this->att_pw )
+        if ( isset($this->mod_att) && $pw != $this->att_pw )
             return false; // die('Invalid password');
 
         if ($this->isFull())
@@ -763,6 +762,12 @@ if ( !$x ) {
             $users_to_join = $this->usersToBeJoined(); // this is DB-expensive so call before the loop
         }
 
+        //TODO: Add max_users_per_room
+        if ( $users_to_join > $this->server->max_users ) {
+            //Session::Messages($langBBBConnectionErrorOverload, 'alert-danger');
+            return false;
+        }
+        
         $start_date = substr($this->start_date, 0, 10) . 'T' . substr($this->start_date, 11);
 
         $duration = 0;

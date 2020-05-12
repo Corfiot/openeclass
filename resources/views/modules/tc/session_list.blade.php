@@ -47,7 +47,7 @@
                             <div class='table_td_header clearfix'>{!! $s['joinLink'] !!}
                             	{!! array_key_exists('warning_message_record',$s)?$s['warning_message_record']:'' !!}</div> 
                             <div class='table_td_body'>
-                                {!! $s['desc'] !!}
+                                {!! $s['description'] !!}
                             </div>
                         </div>
                     </td>

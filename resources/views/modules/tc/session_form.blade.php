@@ -24,28 +24,28 @@
                     </div>
                 </div>
                 <div class='form-group'>
-                    <label for='desc' class='col-sm-2 control-label'>{{ trans('langUnitDescr') }}:</label>
-                    <div class='col-sm-10'>{!! $desc !!}</div>
+                    <label for='description' class='col-sm-2 control-label'>{{ trans('langUnitDescr') }}:</label>
+                    <div class='col-sm-10'>{!! $description !!}</div>
                 </div>
                 <div class='form-group'>
-                    <label for='start_session' class='col-sm-2 control-label'>{{ trans('langNewBBBSessionStart') }}:</label>
+                    <label for='start_date' class='col-sm-2 control-label'>{{ trans('langNewBBBSessionStart') }}:</label>
                     <div class='col-sm-10'>
-                        <input class='form-control' type='text' name='start_session' id='start_session' value='{{ $start }}'>
+                        <input class='form-control' type='text' name='start_date' id='start_date' value='{{ $start_date }}'>
                     </div>
                 </div>
-                <div class='input-append date form-group {{  (Session::getError('BBBEndDate') ? " has-error" : "") }}' id='enddatepicker' data-date='{{ $end }}' data-date-format='dd-mm-yyyy'>
-                    <label for='BBBEndDate' class='col-sm-2 control-label'>{{ trans('langEnd') }}:</label>
+                <div class='input-append date form-group {{  (Session::getError('end_date') ? " has-error" : "") }}' id='enddatepicker' data-date='{{ $end_date }}' data-date-format='dd-mm-yyyy'>
+                    <label for='end_date' class='col-sm-2 control-label'>{{ trans('langEnd') }}:</label>
                     <div class='col-sm-10'>
                         <div class='input-group'>
                             <span class='input-group-addon'>
                                 <input style='cursor:pointer;' type='checkbox' id='enableEndDate' name='enableEndDate' 
                                 	value='1' {{ ($enableEndDate ? ' checked' : '') }}>
                             </span>
-                            <input class='form-control' name='BBBEndDate' id='BBBEndDate' type='text' value='{{ $end }}' {{ ($enableEndDate ? '' : ' disabled')}} >
+                            <input class='form-control' name='end_date' id='end_date' type='text' value='{{ $end_date }}' {{ ($enableEndDate ? '' : ' disabled')}} >
                         </div>
                         <span class='help-block'>
-                        	@if (Session::hasError('BBBEndDate'))
-                        		{{ Session::getError('BBBEndDate') }}
+                        	@if (Session::hasError('end_date'))
+                        		{{ Session::getError('end_date') }}
                         	@else
                         		&nbsp;&nbsp;&nbsp;<i class='fa fa-share fa-rotate-270'></i> {{ trans('langBBBEndHelpBlock') }}
                         	@endif
@@ -58,13 +58,13 @@
                     <div class='col-sm-10'>
                         <div class='radio'>
                           <label>
-                            <input type='radio' id='user_button' name='record' value='true' {{ $record == true ? 'checked' : '' }}>
+                            <input type='radio' id='user_button' name='record' value='1' {{ $record == true ? 'checked' : '' }}>
                             {{ trans('langBBBRecordTrue') }}
                           </label>
                         </div>
                         <div class='radio'>
                           <label>
-                            <input type='radio' id='group_button' name='record' value='false' {{ $record == false ? 'checked' : '' }}>
+                            <input type='radio' id='group_button' name='record' value='0' {{ $record == false ? 'checked' : '' }}>
                             {{ trans('langBBBRecordFalse') }}
                           </label>
                         </div>
@@ -81,11 +81,11 @@
                     <div class='col-sm-10'>
                         <div class='radio'>
                         	<label>
-                                <input type='radio' id='active_button' name='status' value='1' {{ $status == 1 ? "checked" : "" }}>
+                                <input type='radio' id='active_button' name='active' value='1' {{ $active == 1 ? "checked" : "" }}>
                                 {{trans('langVisible') }}
                             </label>
                             <label style='margin-left: 10px;'>
-                            	<input type='radio' id='inactive_button' name='status' value='0' {{ $status == 0 ? "checked" : "" }}>
+                            	<input type='radio' id='inactive_button' name='active' value='0' {{ $active == 0 ? "checked" : "" }}>
                                 {{ trans('langInvisible') }}
                             </label>
                         </div>
@@ -170,23 +170,23 @@
                 width: '100%',
                 selectOnClose: true
             });
-        	$('input#start_session').datetimepicker({
+        	$('input#start_date').datetimepicker({
                 format: 'dd-mm-yyyy hh:ii',
                 pickerPosition: 'bottom-right',
                 //language: '" . $language . "',
                 autoclose: true
             });
-            $('#BBBEndDate').datetimepicker({
+            $('#end_date').datetimepicker({
                 format: 'dd-mm-yyyy hh:ii',
                 pickerPosition: 'bottom-right',
                 //language: '" . $language . "',
                 autoclose: true
             }).on('changeDate', function(ev){
-                if($(this).attr('id') === 'BBBEndDate') {
+                if($(this).attr('id') === 'end_date') {
                     $('#answersDispEndDate, #scoreDispEndDate').removeClass('hidden');
                 }
             }).on('blur', function(ev){
-                if($(this).attr('id') === 'BBBEndDate') {
+                if($(this).attr('id') === 'end_date') {
                     var end_date = $(this).val();
                     if (end_date === '') {
                         if ($('input[name="dispresults"]:checked').val() == 4) {
@@ -200,7 +200,7 @@
                 var dateType = $(this).prop('id').replace('enable', '');
                 if($(this).prop('checked')) {
                     $('input#BBB'+dateType).prop('disabled', false);
-                    if (dateType === 'EndDate' && $('input#BBBEndDate').val() !== '') {
+                    if (dateType === 'EndDate' && $('input#end_date').val() !== '') {
                         $('#answersDispEndDate, #scoreDispEndDate').removeClass('hidden');
                     }
                 } else {
